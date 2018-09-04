@@ -38,8 +38,10 @@ class OpenclTemplateHelper
       'int'
     when 'int16'
       'short'
+    when 'uint8'
+      'uchar'
     when 'boolean'
-      'short'
+      'uchar'
     else
       raise "unknown dtype #{dtype}"
     end
@@ -55,6 +57,8 @@ class OpenclTemplateHelper
       'INT_MIN'
     when 'int16'
       'SHRT_MIN'
+    when 'int8'
+      '0'
     when 'boolean'
       '0'
     else
