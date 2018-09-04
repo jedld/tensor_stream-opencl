@@ -1,10 +1,25 @@
 # TensorStream::Opencl
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/tensor_stream/opencl`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+This gem provides an OpenCL backend for TensorStream (https://github.com/jedld/tensor_stream). OpenCL is an open standard
+that allows running compute applications on heterogenous platforms like CPUs and GPUs.
 
 ## Installation
+
+Make sure OpenCL device drivers are installed in your system. You may refer to the following links:
+
+### Nvidia
+
+https://developer.nvidia.com/opencl
+
+### AMD
+
+https://support.amd.com/en-us/kb-articles/Pages/OpenCL2-Driver.aspx
+
+
+### Intel
+
+https://software.intel.com/en-us/articles/opencl-drivers
+
 
 Add this line to your application's Gemfile:
 
@@ -22,7 +37,7 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Simply including this gem will allow tensor_stream to automatically select opencl devices for use in your computation
 
 ## Development
 
@@ -32,7 +47,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/tensor_stream-opencl. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
+Bug reports and pull requests are welcome on GitHub at https://github.com/jedld/tensor_stream-opencl. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
 
 ## License
 
