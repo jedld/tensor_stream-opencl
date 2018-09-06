@@ -9,7 +9,6 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
   let(:instance) { described_class.new(sess, TensorStream::Evaluator::OpenclEvaluator.default_device, {})}
 
   it_behaves_like "standard ops evaluator"
-  it_behaves_like "TensorStream::Train::Saver"
 
   def create_session
     TensorStream.session([:opencl_evaluator, :ruby_evaluator])

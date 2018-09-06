@@ -53,6 +53,9 @@ module TensorStream
             output_buffer
           end
 
+          register_op :apply_adadelta do |context, tensor, inputs|
+          end
+
           # Adam optimization algorithm
           register_op :apply_adam do |_context, tensor, inputs|
             _target_var, _m, _v, beta1_power, beta2_power, lr_t, beta1_t, beta2_t, epsilon_t, grad = inputs
