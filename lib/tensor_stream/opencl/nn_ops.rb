@@ -1,4 +1,3 @@
-require 'pry-byebug'
 module TensorStream
   module OpenCLHelpers
     # Collection of math functions for interfacing with OpenCL kernels
