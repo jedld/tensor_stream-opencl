@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    tensor_stream-opencl (0.1.2)
+    tensor_stream-opencl (0.1.3)
       opencl_ruby_ffi
       tensor_stream
 
