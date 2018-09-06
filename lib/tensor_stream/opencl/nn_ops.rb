@@ -1,3 +1,4 @@
+require 'pry-byebug'
 module TensorStream
   module OpenCLHelpers
     # Collection of math functions for interfacing with OpenCL kernels
@@ -54,6 +55,39 @@ module TensorStream
           end
 
           register_op :apply_adadelta do |context, tensor, inputs|
+            _target_var, _accum, _accum_update, lr, rho, epsilon, grad = inputs
+            assign = tensor.inputs[0] || tensor
+            assign_acc = tensor.inputs[1]
+            assign_acc_update = tensor.inputs[2]
+
+            # mark variable buffers as dirty
+            assign.buffer.dirty = true # force buffer copy when variable is read externally
+            assign_acc.buffer.dirty = true # force buffer copy when variable is read externally
+            assign_acc_update.buffer.dirty = true # force buffer copy when variable is read externally
+
+            output_buffer = assign.buffer
+
+            m, n = output_buffer.shape
+            work_group = [m || 1, n || 1]
+            cl_m = OpenCL::Int1.new(m || 1)
+            cl_n = OpenCL::Int1.new(n || 1)
+
+            event_wait_list = build_event_wait_list(inputs)
+            method_call = :"apply_adadelta_#{output_buffer.data_type}"
+            event = _cl_program('apply_adadelta', dtype: output_buffer.data_type)
+                                .send(method_call, _opencl_queue, work_group, cl_m, cl_n,
+                                      lr.cl_buffer,
+                                      rho.cl_buffer,
+                                      epsilon.cl_buffer,
+                                      grad.cl_buffer,
+                                      assign.buffer.cl_buffer,
+                                      assign_acc.buffer.cl_buffer,
+                                      assign_acc_update.buffer.cl_buffer,
+                                      event_wait_list: event_wait_list)
+            output_buffer.op = event
+            assign_acc.buffer.op = event
+            assign_acc_update.buffer.op = event
+            output_buffer
           end
 
           # Adam optimization algorithm
