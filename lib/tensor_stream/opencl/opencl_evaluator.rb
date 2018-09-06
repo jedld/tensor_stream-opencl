@@ -11,6 +11,7 @@ require 'narray_ffi'
 require 'tensor_stream/evaluator/base_evaluator'
 require 'tensor_stream/opencl/math_ops'
 require 'tensor_stream/opencl/nn_ops'
+require 'tensor_stream/opencl/images_ops'
 require 'tensor_stream/helpers/op_helper'
 
 module TensorStream
@@ -32,7 +33,8 @@ module TensorStream
       end
     end
 
-    ## PURE ruby evaluator used for testing and development
+    ##
+    # PURE ruby evaluator used for testing and development
     class OpenclEvaluator < BaseEvaluator
       attr_accessor :retain
       attr_reader :opencl_device
@@ -42,6 +44,7 @@ module TensorStream
       include TensorStream::MathHelper
       include TensorStream::OpenCLHelpers::MathOps
       include TensorStream::OpenCLHelpers::NNOps
+      include TensorStream::OpenCLHelpers::ImagesOps
 
       def initialize(session, device, thread_pool: nil, log_intermediates: false)
         super
@@ -731,6 +734,8 @@ module TensorStream
 
                       buffer = if value.is_a?(NArray)
                                  value
+                               elsif data_type == :string && shape.empty?
+                                 allocate_narray_for_type(data_type, value[0].bytesize)
                                else
                                  allocate_narray_for_type(data_type, narray_size)
                                end
@@ -746,8 +751,11 @@ module TensorStream
 
                       @context[:_cache][cache_key] = OpenCLBuffer.new(name: name, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer)
                     end
-
-        if value.is_a?(Array)
+        if data_type == :string
+          value[0].each_byte.with_index do |c, index|
+            cl_object.buffer[index] = c
+          end
+        elsif value.is_a?(Array)
           value.flatten.each_with_index do |element, index|
             cl_object.buffer[index] = if element.is_a?(Tensor)
                                         read_final_result(complete_eval(element, {}))
@@ -780,7 +788,11 @@ module TensorStream
           NArray.int(narray_size)
         when :int16
           NArray.sint(narray_size)
+        when :uint8
+          NArray.byte(narray_size)
         when :boolean
+          NArray.byte(narray_size)
+        when :string
           NArray.byte(narray_size)
         when :unknown
           nil

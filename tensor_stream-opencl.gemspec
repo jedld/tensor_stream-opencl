@@ -38,4 +38,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "pry-byebug"
   spec.add_dependency "tensor_stream"
   spec.add_dependency "opencl_ruby_ffi"
+  spec.add_dependency "oily_png"
 end

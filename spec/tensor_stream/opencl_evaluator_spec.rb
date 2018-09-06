@@ -10,6 +10,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   it_behaves_like "standard ops evaluator"
   it_behaves_like "optimizer evaluator"
+  it_behaves_like "images ops"
 
 
   def create_session

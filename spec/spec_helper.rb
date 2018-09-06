@@ -1,5 +1,6 @@
 require "bundler/setup"
 require "tensor_stream/opencl"
+require "pry-byebug"
 
 Dir["./spec/support/**/*.rb"].sort.each { |f| require f }
 
