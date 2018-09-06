@@ -1,6 +1,6 @@
 require "spec_helper"
 require 'benchmark'
-require 'tensor_stream/evaluator/opencl/opencl_evaluator'
+require 'tensor_stream/opencl/opencl_evaluator'
 require 'tensor_stream'
 
 RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
@@ -54,7 +54,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(80)
+      expect(described_class.ops.keys.size).to eq(81)
     end
 
     specify do
@@ -63,6 +63,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         acos
         add
         add_n
+        apply_adadelta
         apply_adam
         apply_gradient_descent
         apply_momentum

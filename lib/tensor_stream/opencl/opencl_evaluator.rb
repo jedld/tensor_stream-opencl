@@ -5,7 +5,7 @@ require 'tensor_stream/evaluator/buffer'
 require 'tensor_stream/opencl/opencl_buffer'
 require 'tensor_stream/opencl/opencl_template_helper'
 require 'tensor_stream/device'
-require 'tensor_stream/evaluator/opencl/opencl_device'
+require 'tensor_stream/opencl/opencl_device'
 require 'opencl_ruby_ffi'
 require 'narray_ffi'
 require 'tensor_stream/evaluator/base_evaluator'
@@ -781,7 +781,7 @@ module TensorStream
         when :int16
           NArray.sint(narray_size)
         when :boolean
-          NArray.sint(narray_size)
+          NArray.byte(narray_size)
         when :unknown
           nil
         else
