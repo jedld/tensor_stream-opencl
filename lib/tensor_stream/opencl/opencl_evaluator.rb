@@ -165,6 +165,7 @@ module TensorStream
 
       def prepare_input(tensor, context, options = {})
         return nil unless tensor
+
         tensor = resolve_placeholder(tensor)
         if options[:noop]
           tensor
@@ -436,7 +437,9 @@ module TensorStream
         input_b = read_final_result(complete_eval(inputs[1], context))
         size = tensor.options[:size]
 
-        slice_param = input_b.zip(size).collect { |x, y| x..x + y - 1 }.reverse
+        shape = input_a.shape
+
+        slice_param = input_b.zip(size).collect.with_index { | p, index|  p[1] = (p[1] == -1) ? shape[index] : p[1] ; p[0]..p[0] + p[1] - 1 }.reverse
 
         new_buf = input_a.buffer.reshape(*input_a.shape.reverse)
         sliced = new_buf.slice[*slice_param]
@@ -731,10 +734,12 @@ module TensorStream
                       @context[:_cache][cache_key]
                     else
                       narray_size = shape.reduce(:*) || 1
+                      cl_buffer_size = shape.empty? ? 1 : shape.reduce(:*)
 
                       buffer = if value.is_a?(NArray)
                                  value
                                elsif data_type == :string && shape.empty?
+                                 cl_buffer_size = value[0].bytesize
                                  allocate_narray_for_type(data_type, value[0].bytesize)
                                else
                                  allocate_narray_for_type(data_type, narray_size)
@@ -742,7 +747,7 @@ module TensorStream
 
                       return nil if buffer.nil?
 
-                      cl_buffer_size = shape.empty? ? 1 : shape.reduce(:*)
+                      
 
                       cl_buffer = unless value.flatten.empty?
                                     cl_buffer_size = 1 if cl_buffer_size.zero?

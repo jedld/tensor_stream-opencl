@@ -57,7 +57,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(81)
+      expect(described_class.ops.keys.size).to eq(83)
     end
 
     specify do
@@ -83,7 +83,9 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         check_numerics
         cond
         cos
+        decode_png
         div
+        encode_png
         equal
         exp
         expand_dims
@@ -148,9 +150,9 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
     it "allows automatic fallback" do
       a = tf.constant([1,2,3,4], dtype: :float32)
-      c = tf.concat(a, 0)
+      c = tf.concat([a], 0)
       d = tf.sin(c)
-      expect(tr(sess.run(d))).to eq(-0.544)
+      expect(tr(sess.run(d))).to eq([0.8415, 0.9093, 0.1411, -0.7568])
     end
   end
 

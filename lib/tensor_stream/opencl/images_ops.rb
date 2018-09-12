@@ -1,5 +1,4 @@
-require 'oily_png'
-
+# require 'oily_png'
 module TensorStream
   module OpenCLHelpers
     module ImagesOps
@@ -19,12 +18,12 @@ module TensorStream
               if channels == 4
                 output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
                 output_buffer.buffer[start_index + 1] = ChunkyPNG::Color.g(pixel)
-                output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.g(pixel)
+                output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.b(pixel)
                 output_buffer.buffer[start_index + 3] = ChunkyPNG::Color.a(pixel)
               elsif channels == 3
                 output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
                 output_buffer.buffer[start_index + 1] = ChunkyPNG::Color.g(pixel)
-                output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.g(pixel)
+                output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.b(pixel)
               elsif channels == 1
                 output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
               else
@@ -39,10 +38,11 @@ module TensorStream
 
           register_op :encode_png do |_context, tensor, inputs|
             image_data = inputs[0]
-            height, width, channels = shape_eval(image_data)
-
+            height, width, channels = image_data.shape
+            image_buffer = image_data.buffer.reshape(*image_data.shape.reverse).to_a
+\
             png = ChunkyPNG::Image.new(width, height)
-            image_data.each_with_index do |rows, h_index|
+            image_buffer.each_with_index do |rows, h_index|
               rows.each_with_index do |p_data, w_index|
                 if channels == 4
                   png[w_index, h_index] = ChunkyPNG::Color.rgba(p_data[0], p_data[1], p_data[2], p_data[3])
@@ -53,7 +53,7 @@ module TensorStream
                 end
               end
             end
-            png.to_s
+            convert_to_opencl(png.to_s, [], data_type: :string, name: tensor.name)
           end
         end
       end

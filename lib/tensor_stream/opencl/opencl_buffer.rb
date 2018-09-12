@@ -24,6 +24,7 @@ module TensorStream
       end
 
       if shape.empty?
+        return buffer.to_s if data_type == :string
         return buffer[0] != 0 if data_type == :boolean
         return buffer[0]
       end
