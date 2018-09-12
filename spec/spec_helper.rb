@@ -2,7 +2,7 @@ require "bundler/setup"
 require "tensor_stream/opencl"
 require "pry-byebug"
 
-Dir["./spec/support/**/*.rb"].sort.each { |f| require f }
+Dir["../tensor_stream/spec/support/**/*.rb"].sort.each { |f| require f }
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

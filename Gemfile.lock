@@ -4,7 +4,7 @@ PATH
     tensor_stream-opencl (0.1.3)
       oily_png
       opencl_ruby_ffi
-      tensor_stream
+      tensor_stream (~> 0.8.6)
 
 GEM
   remote: https://rubygems.org/
@@ -47,7 +47,7 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.8.0)
     rspec-support (3.8.0)
-    tensor_stream (0.8.5)
+    tensor_stream (0.8.6)
       chunky_png
       concurrent-ruby
       deep_merge

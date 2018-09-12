@@ -773,7 +773,10 @@ module TensorStream
           cl_object.buffer[0] = Tensor.cast_dtype(value, data_type)
         end
 
-        write_op = _opencl_queue.enqueue_write_buffer(cl_object.cl_buffer, cl_object.buffer) if cl_object.cl_buffer && !value.nil? && (!value.is_a?(Array) || !value.empty?)
+        if cl_object.cl_buffer && !value.nil? && (!value.is_a?(Array) || !value.empty?)
+          write_op = _opencl_queue.enqueue_write_buffer(cl_object.cl_buffer, cl_object.buffer)
+        end
+
         cl_object.op = write_op
         cl_object
       end
