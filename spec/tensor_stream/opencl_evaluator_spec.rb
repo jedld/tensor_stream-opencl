@@ -57,7 +57,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(83)
+      expect(described_class.ops.keys.size).to eq(84)
     end
 
     specify do
@@ -143,6 +143,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         tanh
         tanh_grad
         transpose
+        unstack
         variable
         where
       ])
