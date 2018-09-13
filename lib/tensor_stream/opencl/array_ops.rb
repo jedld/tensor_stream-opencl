@@ -30,6 +30,35 @@ module TensorStream
             convert_to_opencl(buffer, shape.buffer.to_a, data_type: tensor.data_type, name: tensor.name)
           end
 
+          register_op :split, complete: true  do |context, tensor, inputs|
+            value, num_split, axis = inputs
+            value_shape = shape_eval(value)
+            num_split = if num_split.is_a?(TensorStream::OpenCLBuffer)
+              num_split.buffer.reshape(*num_split.shape.reverse).to_a
+            else
+              num_split
+            end
+            res = if num_split.is_a?(Array)
+              begin_index = 0
+              num_split.collect do |num|
+                end_index = begin_index + num
+                arr = split_tensor(value, begin_index, end_index, axis)
+                begin_index = end_index
+                convert_to_opencl(arr, shape_eval(arr), data_type: tensor.data_type, name: "#{tensor.name}/out_#{num}")
+              end
+            else
+              raise TensorStream::ValueError, "#{num_split} does not divide #{value_shape[axis]} evenly" if value_shape[axis] % num_split != 0
+              piece_sizes = value_shape[axis] / num_split
+              Array.new(num_split) do |num|
+                begin_index = num * piece_sizes
+                end_index = begin_index + piece_sizes
+                arr = split_tensor(value, begin_index, end_index, axis)
+                convert_to_opencl(arr, shape_eval(arr), data_type: tensor.data_type, name: "#{tensor.name}/out_#{num}")
+              end
+            end
+            TensorStream::Evaluator::OutputGroup.new(res, res.map { tensor.inputs[0].data_type })  
+          end
+
           register_op :stack do |_context, tensor, inputs|
             axis = tensor.options[:axis] || 0
             shape = inputs[0].shape
@@ -122,6 +151,100 @@ module TensorStream
             end
 
             TensorStream::Evaluator::OutputGroup.new(outputs, outputs.map(&:data_type))
+          end
+
+          register_op :index, noop: true do |context, tensor, inputs|
+            a = _run(inputs[0], context)
+            index = read_final_result(_run(inputs[1], context))
+    
+            if a.is_a?(TensorStream::Evaluator::OutputGroup)
+              a.outputs[index]
+            elsif a.is_a?(Array)
+              a[index]
+            else
+              new_shape = a.shape.dup
+              new_shape.shift
+              input_a = read_final_result(a)
+              convert_to_opencl(input_a[index], new_shape, data_type: a.data_type, name: tensor.name)
+            end
+          end
+
+          register_op :shape do |_context, tensor, inputs|
+            wrap_opencl(inputs[0].shape, name: tensor.name, data_type: tensor.data_type)
+          end
+
+          register_op :shape_n do |_context, tensor, inputs|
+            shapes = inputs.collect do |input|
+              wrap_opencl(input.shape, name: tensor.name, data_type: tensor.data_type)
+            end
+            TensorStream::Evaluator::OutputGroup.new(shapes, shapes.map { tensor.data_type })  
+          end
+
+          register_op :reshape, buffer: true do |_context, tensor, inputs|
+            arr = inputs[0]
+            new_shape = read_final_result(inputs[1])
+    
+            shape = if new_shape.size.zero? && arr.buffer.size == 1
+                      new_shape
+                    else
+                      TensorShape.fix_inferred_elements(new_shape, arr.buffer.size)
+                    end
+    
+            convert_to_opencl(arr.buffer, shape, data_type: arr.data_type, name: tensor.name)
+          end
+
+          register_op :transpose, buffer: true do |_context, tensor, inputs|
+            t_param = Array.new(inputs[0].shape.size) { |index| index }.reverse
+    
+            if inputs[0].shape.size == 2 && inputs[1].nil?
+              transposed = inputs[0].buffer.reshape(*inputs[0].shape.reverse).transpose(*t_param)
+              res = convert_to_opencl(transposed.flatten, transposed.shape.reverse, data_type: inputs[0].data_type, name: tensor.name)
+              res
+            else
+              rank = inputs[0].shape.size
+              perm = inputs[1].nil? ? (0...rank).to_a.reverse : inputs[1].buffer
+              new_shape = perm.map { |p| inputs[0].shape[p] }.to_a
+              output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
+              transpose_with_perm(inputs[0].buffer, output_buffer.buffer, inputs[0].shape, new_shape, perm)
+    
+              write_op = _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
+              output_buffer.op = write_op
+              output_buffer
+            end
+          end
+
+          register_op :slice, noop: true do |context, tensor, inputs|
+            input_a = complete_eval(inputs[0], context)
+            input_b = read_final_result(complete_eval(inputs[1], context))
+            size = tensor.options[:size]
+    
+            shape = input_a.shape
+    
+            slice_param = input_b.zip(size).collect.with_index { | p, index|  p[1] = (p[1] == -1) ? shape[index] : p[1] ; p[0]..p[0] + p[1] - 1 }.reverse
+    
+            new_buf = input_a.buffer.reshape(*input_a.shape.reverse)
+            sliced = new_buf.slice[*slice_param]
+            convert_to_opencl(sliced.flatten, sliced.shape.reverse, data_type: inputs[0].data_type, name: tensor.name)
+          end
+
+          register_op :rank do |_context, tensor, inputs|
+            wrap_opencl(inputs[0].shape.size, data_type: tensor.data_type, name: tensor.name)
+          end
+
+          register_op :cast do |_context, tensor, inputs|
+            a = inputs[0]
+            if a.data_type != tensor.data_type
+              buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
+              m, n = a.shape
+              cl_m = OpenCL::Int1.new(m || 1)
+              cl_n = OpenCL::Int1.new(n || 1)
+              work_group = [m || 1, n || 1]
+              event_wait_list = build_event_wait_list(inputs)
+              buffer.op = _cl_program("cast", source_dt: a.data_type, target_dt: tensor.data_type).cast(_opencl_queue, work_group, cl_m, cl_n, a.cl_buffer, buffer.cl_buffer, event_wait_list: event_wait_list)
+              buffer
+            else
+              a
+            end
           end
         end
       end

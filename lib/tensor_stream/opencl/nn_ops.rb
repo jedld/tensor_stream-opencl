@@ -130,6 +130,41 @@ module TensorStream
             output_buffer
           end
 
+          register_op :apply_adagrad do |context, tensor, inputs|
+            target_var, accum, lr, grad = inputs
+
+            assign = tensor.inputs[0] || tensor
+            assign_acc = tensor.inputs[1]
+            
+            assign.buffer.dirty = true
+            assign_acc.buffer.dirty = true
+            output_buffer = assign.buffer
+
+            m, n = output_buffer.shape
+            work_group = [m || 1, n || 1]
+            cl_m = OpenCL::Int1.new(m || 1)
+            cl_n = OpenCL::Int1.new(n || 1)
+
+            event_wait_list = build_event_wait_list(inputs)
+            method_call = :"apply_adagrad_#{output_buffer.data_type}"
+            event = _cl_program('apply_adagrad', dtype: output_buffer.data_type)
+                                .send(method_call, _opencl_queue, work_group, cl_m, cl_n,
+                                      lr.cl_buffer,
+                                      grad.cl_buffer,
+                                      assign.buffer.cl_buffer,
+                                      assign_acc.buffer.cl_buffer,
+                                      event_wait_list: event_wait_list)
+            output_buffer.op = event
+            assign_acc.buffer.op = event
+            output_buffer
+          end
+
+          register_op :apply_centered_rms_prop do |context, tensor, inputs|
+          end
+
+          register_op :apply_rms_prop do |context, tensor, inputs|
+          end
+
           register_op :softmax do |_context, tensor, inputs|
             a = inputs[0]
             event_wait_list = build_event_wait_list(inputs)

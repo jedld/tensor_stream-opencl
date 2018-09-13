@@ -319,23 +319,6 @@ module TensorStream
         execute_cond_func('where', tensor, pred, inputs[0], inputs[1], context)
       end
 
-      register_op :cast do |_context, tensor, inputs|
-        a = inputs[0]
-        if a.data_type != tensor.data_type
-          buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
-          m, n = a.shape
-          cl_m = OpenCL::Int1.new(m || 1)
-          cl_n = OpenCL::Int1.new(n || 1)
-          work_group = [m || 1, n || 1]
-          event_wait_list = build_event_wait_list(inputs)
-          buffer.op = _cl_program("cast", source_dt: a.data_type, target_dt: tensor.data_type).cast(_opencl_queue, work_group, cl_m, cl_n, a.cl_buffer, buffer.cl_buffer, event_wait_list: event_wait_list)
-          buffer
-        else
-          a
-        end
-      end
-
-
       register_op :check_numerics, noop: true do |context, tensor, inputs|
         a = complete_eval(inputs[0], context)
         name = tensor.options[:name]
@@ -368,84 +351,13 @@ module TensorStream
         a
       end
 
-      register_op :rank do |_context, tensor, inputs|
-        wrap_opencl(inputs[0].shape.size, data_type: tensor.data_type, name: tensor.name)
-      end
-
       register_op :stop_gradient do |_context, _tensor, inputs|
         inputs[0]
-      end
-
-      register_op :slice, noop: true do |context, tensor, inputs|
-        input_a = complete_eval(inputs[0], context)
-        input_b = read_final_result(complete_eval(inputs[1], context))
-        size = tensor.options[:size]
-
-        shape = input_a.shape
-
-        slice_param = input_b.zip(size).collect.with_index { | p, index|  p[1] = (p[1] == -1) ? shape[index] : p[1] ; p[0]..p[0] + p[1] - 1 }.reverse
-
-        new_buf = input_a.buffer.reshape(*input_a.shape.reverse)
-        sliced = new_buf.slice[*slice_param]
-        convert_to_opencl(sliced.flatten, sliced.shape.reverse, data_type: inputs[0].data_type, name: tensor.name)
-      end
-
-      register_op :transpose, buffer: true do |_context, tensor, inputs|
-        t_param = Array.new(inputs[0].shape.size) { |index| index }.reverse
-
-        if inputs[0].shape.size == 2 && inputs[1].nil?
-          transposed = inputs[0].buffer.reshape(*inputs[0].shape.reverse).transpose(*t_param)
-          res = convert_to_opencl(transposed.flatten, transposed.shape.reverse, data_type: inputs[0].data_type, name: tensor.name)
-          res
-        else
-          rank = inputs[0].shape.size
-          perm = inputs[1].nil? ? (0...rank).to_a.reverse : inputs[1].buffer
-          new_shape = perm.map { |p| inputs[0].shape[p] }.to_a
-          output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
-          transpose_with_perm(inputs[0].buffer, output_buffer.buffer, inputs[0].shape, new_shape, perm)
-
-          write_op = _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
-          output_buffer.op = write_op
-          output_buffer
-        end
-      end
-
-      register_op :index, noop: true do |context, tensor, inputs|
-        a = _run(inputs[0], context)
-        index = read_final_result(_run(inputs[1], context))
-
-        if a.is_a?(OutputGroup)
-          a.outputs[index]
-        elsif a.is_a?(Array)
-          a[index]
-        else
-          new_shape = a.shape.dup
-          new_shape.shift
-          input_a = read_final_result(a)
-          convert_to_opencl(input_a[index], new_shape, data_type: a.data_type, name: tensor.name)
-        end
       end
 
       register_op :broadcast_gradient_args, buffer: true do |_context, tensor, inputs|
         rx, ry = get_broadcast_gradient_args(inputs[0].buffer.to_a, inputs[1].buffer.to_a)
         OutputGroup.new([wrap_opencl(rx, data_type: :int32, name: tensor.name), wrap_opencl(ry, data_type: :int32, name: "#{tensor.name}:1")], tensor.inputs.map(&:data_type))
-      end
-
-      register_op :shape do |_context, tensor, inputs|
-        wrap_opencl(inputs[0].shape, name: tensor.name, data_type: tensor.data_type)
-      end
-
-      register_op :reshape, buffer: true do |_context, tensor, inputs|
-        arr = inputs[0]
-        new_shape = read_final_result(inputs[1])
-
-        shape = if new_shape.size.zero? && arr.buffer.size == 1
-                  new_shape
-                else
-                  TensorShape.fix_inferred_elements(new_shape, arr.buffer.size)
-                end
-
-        convert_to_opencl(arr.buffer, shape, data_type: arr.data_type, name: tensor.name)
       end
 
       register_op :flow_group do |context, _tensor, inputs|

@@ -57,7 +57,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(84)
+      expect(described_class.ops.keys.size).to eq(88)
     end
 
     specify do
@@ -67,9 +67,12 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         add
         add_n
         apply_adadelta
+        apply_adagrad
         apply_adam
+        apply_centered_rms_prop
         apply_gradient_descent
         apply_momentum
+        apply_rms_prop
         argmax
         argmin
         asin
@@ -122,6 +125,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         reshape
         round
         shape
+        shape_n
         sigmoid
         sigmoid_grad
         sign
