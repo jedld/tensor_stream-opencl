@@ -54,11 +54,22 @@ module TensorStream
 
             cl_n = OpenCL::Int1.new(elem_size)
             work_group = [elem_size]
-            event_wait_list = build_event_wait_list(inputs)
-            ops = inputs.each_with_index.map do |input, index|
-              cl_index = OpenCL::Int1.new(index)
-              _cl_program("pack", data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).pack(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
-            end
+
+            ops = if axis == 0 # fast path if axis == 0
+                    step = multipliers[0]
+                    inputs.each_with_index.map do |input, index|
+                      start = index * step * input.buffer.element_size
+                      region = [input.buffer.size * input.buffer.element_size, 1, 1]
+                      _opencl_queue.enqueue_copy_buffer_rect(input.cl_buffer, output_buffer.cl_buffer, region, dst_origin: [start, 0, 0], event_wait_list: input.op)
+                    end
+                  else
+                    event_wait_list = build_event_wait_list(inputs)
+                    inputs.each_with_index.map do |input, index|
+                      cl_index = OpenCL::Int1.new(index)
+                      _cl_program("pack", data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).pack(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+                    end
+                  end
+
             output_buffer.op = ops
             output_buffer
           end
@@ -79,28 +90,35 @@ module TensorStream
             rotated_shape = Array.new(axis + 1) { new_shape.shift }
             new_shape = rotated_shape.rotate!(-1) + new_shape
 
-            output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
             multipliers = new_shape.dup.drop(1).reverse.inject([1]) do |a, s|
               a << s * a.last
             end.reverse
 
-            cl_n = OpenCL::Int1.new(elem_size)
-            work_group = [elem_size]
-            event_wait_list = build_event_wait_list(inputs)
-            ops = inputs.each_with_index.map do |input, index|
-              cl_index = OpenCL::Int1.new(index)
-              _cl_program("unpack", data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).unpack(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
-            end
-            output_buffer.op = ops
-            synced_buffer = complete_eval(output_buffer, context)
+            output_buffer = if axis == 0 # shortcut for axis == 0
+                              value
+                            else
+                              output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
+                              cl_n = OpenCL::Int1.new(elem_size)
+                              work_group = [elem_size]
+                              event_wait_list = build_event_wait_list(inputs)
+                              ops = inputs.each_with_index.map do |input, index|
+                                cl_index = OpenCL::Int1.new(index)
+                                _cl_program("unpack", data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).unpack(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+                              end
+                              output_buffer.op = ops
+                              output_buffer
+                            end
 
             step = multipliers[0]
             sub_shape = new_shape.dup
             sub_shape.shift
 
             outputs = Array.new(new_shape[0]) do |index|
-              start = index * step
-              convert_to_opencl(synced_buffer.buffer[start...start+step], sub_shape, data_type: tensor.data_type)
+              buffer = _create_result_buffer(tensor.data_type, sub_shape, "#{tensor.name}/out_#{index}")
+              start = index * step * buffer.buffer.element_size
+              region = [buffer.buffer.size * buffer.buffer.element_size, 1, 1]
+              buffer.op = _opencl_queue.enqueue_copy_buffer_rect(output_buffer.cl_buffer, buffer.cl_buffer, region, src_origin: [start, 0, 0], event_wait_list: output_buffer.op)
+              buffer
             end
 
             TensorStream::Evaluator::OutputGroup.new(outputs, outputs.map(&:data_type))
