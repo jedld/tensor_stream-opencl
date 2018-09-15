@@ -216,11 +216,17 @@ module TensorStream
       def _cl_program(kernel, args = {})
         suffix = args.collect { |k, v| "#{k}.#{escape_arg_content(v)}" }.join('.')
         @context[:_cache]["_opencl_kernel_#{kernel}.#{suffix}:#{object_id}"] ||= begin
-          filename = %w[cl.erb cl].map { |ext| cl_template_path(kernel, ext) }.find { |n| File.exist?(n) }
-          raise "opencl kernel template for #{kernel} has not yet been defined" if filename.nil?
-          source = File.read(filename)
-          source = OpenclTemplateHelper.new(source).generate(args)
-          # File.write("/tmp/#{kernel}.#{suffix}.cl", source)
+          file_path = File.join('/tmp', "#{kernel}.#{suffix}.cl")
+          source = if File.exist?(file_path)
+                     File.read(file_path)
+                   else
+                     filename = %w[cl.erb cl].map { |ext| cl_template_path(kernel, ext) }.find { |n| File.exist?(n) }
+                     raise "opencl kernel template for #{kernel} has not yet been defined" if filename.nil?
+                     source = File.read(filename)
+                     source = OpenclTemplateHelper.new(source).generate(args)
+                     File.write(file_path, source)
+                     source
+                   end
           program = _opencl_context.create_program_with_source(source)
           program.build
         rescue OpenCL::Error::BUILD_PROGRAM_FAILURE => e
@@ -675,6 +681,37 @@ module TensorStream
         end
       end
 
+      # automatically use sub buffers
+      def _create_result_sub_buffer(parent_buffer, index, data_type, shape, name)
+        cache_key ="_sub_result_#{parent_buffer.object_id}_#{name}_#{index}:#{object_id}"
+        @context[:_cache][:_cl_buffers][cache_key] ||= begin
+          size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
+          buffer = allocate_narray_for_type(data_type, size)
+
+          if parent_buffer.cl_buffer.associated_memobject.nil?
+            start = index * buffer.size * buffer.element_size
+            region = OpenCL::BufferRegion::new(start, buffer.size * buffer.element_size)
+            cl_buffer = parent_buffer.cl_buffer.create_sub_buffer(OpenCL::BUFFER_CREATE_TYPE_REGION, region)
+            OpenCLBuffer.new(data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
+          else
+            _create_result_buffer(tensor.data_type, shape, name)
+          end
+        end
+
+        buffer = @context[:_cache][:_cl_buffers][cache_key]
+
+        if buffer.cl_buffer.associated_memobject
+          buffer.op = parent_buffer.op
+        else
+          region_size_in_bytes = buffer.buffer.size * buffer.buffer.element_size
+          start = index * region_size_in_bytes
+          region = [region_size_in_bytes, 1, 1]
+          buffer.op = _opencl_queue.enqueue_copy_buffer_rect(parent_buffer.cl_buffer, buffer.cl_buffer, region, src_origin: [start, 0, 0], event_wait_list: parent_buffer.op)
+        end
+
+        buffer
+      end
+
       def get_op_with_axis(a, target_axis, current_axis, output_type, op = ->(t, u) { t > u })
         if target_axis == current_axis
           if a[0].is_a?(Array)
@@ -774,7 +811,7 @@ module TensorStream
       end
 
       def build_event_wait_list(inputs)
-        inputs.compact.map(&:op).flatten
+        inputs.compact.map(&:op).flatten.compact
       end
 
       def resolve_placeholder(placeholder, _execution_context = {})

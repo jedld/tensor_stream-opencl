@@ -9,6 +9,7 @@ PATH
 GEM
   remote: https://rubygems.org/
   specs:
+    awesome_print (1.8.0)
     byebug (10.0.2)
     chunky_png (1.3.10)
     coderay (1.1.2)
@@ -56,6 +57,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  awesome_print
   bundler (~> 1.16)
   pry-byebug
   rake (~> 10.0)

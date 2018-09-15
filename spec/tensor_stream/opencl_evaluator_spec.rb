@@ -57,7 +57,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(88)
+      expect(described_class.ops.keys.size).to eq(90)
     end
 
     specify do
@@ -84,6 +84,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         cast
         ceil
         check_numerics
+        concat
         cond
         cos
         decode_png
@@ -136,6 +137,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         softmax_cross_entropy_with_logits_v2
         softmax_cross_entropy_with_logits_v2_grad
         softmax_grad
+        split
         sqrt
         square
         squared_difference
