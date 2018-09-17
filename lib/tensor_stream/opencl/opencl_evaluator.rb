@@ -91,7 +91,9 @@ module TensorStream
 
       # opencl evaluator main entrypoint
       def run(tensor, execution_context)
-        read_final_result(complete_eval(tensor, execution_context))
+         result = complete_eval(tensor, execution_context)
+        _opencl_queue.finish
+        read_final_result(result)
       end
 
       def run_with_buffer(tensor, context, execution_context)
@@ -122,9 +124,9 @@ module TensorStream
       def enqueue_buffer_read(tensor, context)
         buffer = _run(tensor, context)
         if buffer.is_a?(Array)
-          buffer = buffer.collect do |b|
+          buffer.collect do |b|
             next b if b.buffer.size.zero?
-            _opencl_queue.enqueue_read_buffer(b.cl_buffer, b.buffer, event_wait_list: build_event_wait_list([b]))
+            b.op = _opencl_queue.enqueue_read_buffer(b.cl_buffer, b.buffer, event_wait_list: build_event_wait_list([b]))
             b
           end
         else
@@ -132,14 +134,16 @@ module TensorStream
           return buffer if buffer.nil?
           return [] if buffer.buffer.nil?
           return buffer if buffer.buffer.size.zero?
-          _opencl_queue.enqueue_read_buffer(buffer.cl_buffer, buffer.buffer, event_wait_list: build_event_wait_list([buffer]))
+          buffer.op = _opencl_queue.enqueue_read_buffer(buffer.cl_buffer, buffer.buffer, event_wait_list: build_event_wait_list([buffer]))
           buffer
         end
       end
 
       def complete_eval(tensor, context)
         buffer = enqueue_buffer_read(tensor, context)
-        _opencl_queue.finish
+        events = build_event_wait_list([buffer])
+
+        OpenCL.wait_for_events(events) unless events.empty?
         buffer
       end
 
@@ -366,8 +370,9 @@ module TensorStream
         OutputGroup.new([wrap_opencl(rx, data_type: :int32, name: tensor.name), wrap_opencl(ry, data_type: :int32, name: "#{tensor.name}:1")], tensor.inputs.map(&:data_type))
       end
 
-      register_op :flow_group do |context, _tensor, inputs|
-        _opencl_queue.finish
+      register_op :flow_group do |_context, _tensor, inputs|
+        events = build_event_wait_list(inputs)
+        OpenCL.wait_for_events(events) unless events.empty?
         nil
       end
 
@@ -811,7 +816,7 @@ module TensorStream
       end
 
       def build_event_wait_list(inputs)
-        inputs.compact.map(&:op).flatten.compact
+        inputs.flatten.compact.map(&:op).compact
       end
 
       def resolve_placeholder(placeholder, _execution_context = {})
