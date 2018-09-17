@@ -13,12 +13,12 @@ __kernel void concat(const int N, const int index, __global const <%= ctype %> *
     index_map[<%= index %>] = (int)floor(ptr / (float)<%= div %>);<% if index < divisors.size - 1%>ptr = ptr % <%= div %>;<% end %><% end %>
 
     // Apply axis translation if needed
-    <% if axis > 0 %>
-        int first = index_map[0];
-    <% axis.times do |i| %>
-        index_map[<%= i %>] = index_map[<%= (i + 1) %>];<% end %>
-        index_map[<%= axis %>] = first;
-    <% end%>
+    // <% if axis > 0 %>
+    //     int first = index_map[0];
+    // <% axis.times do |i| %>
+    //     index_map[<%= i %>] = index_map[<%= (i + 1) %>];<% end %>
+    //     index_map[<%= axis %>] = first;
+    // <% end%>
 
     C[<%= multipliers.each_with_index.map { |m, idx| "#{m}*index_map[#{idx}]" }.join(' + ') %>] = A[globalCol];
 }
