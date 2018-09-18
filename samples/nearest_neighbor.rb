@@ -19,8 +19,8 @@ tf = TensorStream
 mnist = Mnist.read_data_sets('/tmp/data', one_hot: true)
 
 # In this example, we limit mnist data
-Xtr, Ytr = mnist.train.next_batch(5000) #5000 for training (nn candidates)
-Xte, Yte = mnist.test.next_batch(200) #200 for testing
+Xtr, Ytr = mnist.train.next_batch(5000) # 5000 for training (nn candidates)
+Xte, Yte = mnist.test.next_batch(200) # 200 for testing
 
 # tf Graph Input
 xtr = tf.placeholder(:float, shape: [nil, 784])

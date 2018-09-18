@@ -21,7 +21,9 @@ module TensorStream
 
             event_wait_list = build_event_wait_list([assign.buffer, learning_rate, delta])
             method_call = :"apply_gradient_#{output_buffer.data_type}"
-            event = _cl_program("apply_gradient", dtype: output_buffer.data_type).send(method_call, _opencl_queue, work_group, cl_m, cl_n, delta.cl_buffer, learning_rate.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            event = _cl_program("apply_gradient", dtype: output_buffer.data_type).
+                      send(method_call, _opencl_queue, work_group, cl_m, cl_n, delta.cl_buffer,
+                           learning_rate.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer.op = event
             output_buffer
           end
@@ -248,7 +250,9 @@ module TensorStream
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
-            event = _cl_program('softmax_grad', dtype: dtype, size: n).send(:"softmax_grad_#{dtype}", _opencl_queue, work_group, cl_n, a.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            event = _cl_program('softmax_grad', dtype: dtype, size: n).
+                        send(:"softmax_grad_#{dtype}", _opencl_queue, work_group, cl_n, a.cl_buffer,
+                             grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer.op = event
             output_buffer
           end

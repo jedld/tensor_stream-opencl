@@ -19,7 +19,7 @@ x_data = rows.map {|row| row[0,4].map(&:to_f) }
 y_data = rows.map {|row| label_encodings[row[4]] }
 
 # Normalize data values before feeding into network
-normalize = -> (val, high, low) {  (val - low) / (high - low) } # maps input to float between 0 and 1
+normalize = -> (val, high, low) { (val - low) / (high - low) } # maps input to float between 0 and 1
 
 columns = (0..3).map do |i|
   x_data.map {|row| row[i] }
@@ -28,7 +28,7 @@ end
 x_data.map! do |row|
   row.map.with_index do |val, j|
     max, min = columns[j].max, columns[j].min
-    normalize.(val, max, min)
+    normalize.call(val, max, min)
   end
 end
 
@@ -45,7 +45,7 @@ end
 
 validation_cases = []
 x_test.each_with_index do |x, index|
-  validation_cases << [x, y_test[index] ]
+  validation_cases << [x, y_test[index]]
 end
 
 

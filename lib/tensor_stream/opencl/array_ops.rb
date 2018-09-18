@@ -67,7 +67,8 @@ module TensorStream
                           start = 0
                           buffers.each do |buffer|
                             region = [buffer.buffer.size * buffer.buffer.element_size, 1, 1]
-                            buffer.op = _opencl_queue.enqueue_copy_buffer_rect(value.cl_buffer, buffer.cl_buffer, region, src_origin: [start, 0, 0], event_wait_list: value.op)
+                            buffer.op = _opencl_queue.enqueue_copy_buffer_rect(value.cl_buffer, buffer.cl_buffer,
+                              region, src_origin: [start, 0, 0], event_wait_list: value.op)
                             start += buffer.buffer.size * buffer.buffer.element_size
                           end
                           buffers
@@ -109,10 +110,13 @@ module TensorStream
             output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
             ops = if axis.zero? # fast path
               inputs.each_with_index.map do |input, index|
+                next if input.empty_value?
                 start = index * input.buffer.size * input.buffer.element_size
                 region = [input.buffer.size * input.buffer.element_size, 1, 1]
-                _opencl_queue.enqueue_copy_buffer_rect(input.cl_buffer, output_buffer.cl_buffer, region, dst_origin: [start, 0, 0], event_wait_list: input.op)
-              end
+                event_wait_list = build_event_wait_list(input)
+                _opencl_queue.enqueue_copy_buffer_rect(input.cl_buffer, output_buffer.cl_buffer,
+                      region, dst_origin: [start, 0, 0], event_wait_list: event_wait_list)
+              end.compact
             else
               elem_size = shape.empty? ? 1 : shape.reduce(:*)
               cl_n = OpenCL::Int1.new(elem_size)
@@ -120,7 +124,9 @@ module TensorStream
               event_wait_list = build_event_wait_list(inputs)
               inputs.each_with_index.map do |input, index|
                 cl_index = OpenCL::Int1.new(index)
-                _cl_program('concat', data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).concat(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+                _cl_program('concat', data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).
+                              concat(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer,
+                                     output_buffer.cl_buffer, event_wait_list: event_wait_list)
               end
             end
             output_buffer.op = ops

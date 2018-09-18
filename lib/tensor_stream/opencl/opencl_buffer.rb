@@ -14,6 +14,10 @@ module TensorStream
       @op = op
     end
 
+    def empty_value?
+      @shape == [0]
+    end
+
     def to_ruby
       return [] if buffer.empty?
 

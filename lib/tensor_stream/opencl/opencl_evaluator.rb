@@ -530,7 +530,10 @@ module TensorStream
         cl_n = OpenCL::Int1.new(n || 1)
 
         event_wait_list = build_event_wait_list([a, b, p]) # add dependency wait list
-        output_buffer.op = _cl_program(op_name.to_s, dtype: dtype).send(:"#{op_name}_#{dtype}", _opencl_queue, work_group, cl_m, cl_n, p.cl_buffer, a.cl_buffer, b.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+        output_buffer.op = _cl_program(op_name.to_s, dtype: dtype).
+                                        send(:"#{op_name}_#{dtype}", _opencl_queue, work_group,
+                                              cl_m, cl_n, p.cl_buffer, a.cl_buffer, b.cl_buffer,
+                                              output_buffer.cl_buffer, event_wait_list: event_wait_list)
         output_buffer
       end
 
@@ -816,7 +819,11 @@ module TensorStream
       end
 
       def build_event_wait_list(inputs)
-        inputs.flatten.compact.map(&:op).compact
+        if inputs.is_a?(Array)
+          inputs.flatten.compact.map(&:op).compact
+        else
+          inputs.op ? [inputs.op] : []
+        end
       end
 
       def resolve_placeholder(placeholder, _execution_context = {})
