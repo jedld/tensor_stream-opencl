@@ -92,6 +92,7 @@ module TensorStream
       # opencl evaluator main entrypoint
       def run(tensor, execution_context)
          result = complete_eval(tensor, execution_context)
+        #  puts "wait finish"
         _opencl_queue.finish
         read_final_result(result)
       end
@@ -140,9 +141,11 @@ module TensorStream
       end
 
       def complete_eval(tensor, context)
+        return nil if tensor.nil?
+
         buffer = enqueue_buffer_read(tensor, context)
         events = build_event_wait_list([buffer])
-
+        # puts "wait #{tensor.name}"
         OpenCL.wait_for_events(events) unless events.empty?
         buffer
       end
@@ -291,10 +294,10 @@ module TensorStream
       end
 
       register_op :identity do |context, tensor, inputs|
-        if tensor.inputs.size > 1
-          tensor.inputs[1..inputs.size].each { |input| complete_eval(input, context) }
-        end
-        inputs[0]
+        value = inputs[0]
+        buffer = OpenCLBuffer.new(name: tensor.name, data_type: tensor.data_type, shape: value.shape, buffer: value.buffer, cl_buffer: value.cl_buffer)
+        buffer.op = build_event_wait_list(inputs)
+        buffer
       end
 
       register_op :assign, noop: true do |context, tensor, inputs|
@@ -820,7 +823,7 @@ module TensorStream
 
       def build_event_wait_list(inputs)
         if inputs.is_a?(Array)
-          inputs.flatten.compact.map(&:op).compact
+          inputs.flatten.compact.map(&:op).compact.uniq
         else
           inputs.op ? [inputs.op] : []
         end

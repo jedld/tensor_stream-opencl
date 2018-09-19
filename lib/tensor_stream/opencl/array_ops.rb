@@ -250,9 +250,9 @@ module TensorStream
             TensorStream::Evaluator::OutputGroup.new(shapes, shapes.map { tensor.data_type })
           end
 
-          register_op :reshape, buffer: true do |_context, tensor, inputs|
+          register_op :reshape do |context, tensor, inputs|
             arr = inputs[0]
-            new_shape = read_final_result(inputs[1])
+            new_shape = read_final_result(complete_eval(inputs[1], context))
 
             shape = if new_shape.size.zero? && arr.buffer.size == 1
                       new_shape
@@ -260,7 +260,10 @@ module TensorStream
                       TensorShape.fix_inferred_elements(new_shape, arr.buffer.size)
                     end
 
-            convert_to_opencl(arr.buffer, shape, data_type: arr.data_type, name: tensor.name)
+            OpenCLBuffer.new(name: tensor.name, data_type: tensor.data_type,
+                             shape: shape, buffer: arr.buffer,
+                             cl_buffer: arr.cl_buffer,
+                             op: arr.op)
           end
 
           register_op :transpose, buffer: true do |_context, tensor, inputs|
