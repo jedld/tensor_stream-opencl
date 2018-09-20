@@ -47,12 +47,12 @@ module TensorStream
 
                         if axis.zero? # axis zero fast copy path
                           Array.new(num_split) do |index|
-                            _create_result_sub_buffer(value, index, tensor.data_type, new_shape, "#{tensor.name}/out_#{index}")
+                            _create_result_sub_buffer(value, index, tensor.data_type, new_shape, "#{tensor.name}/out_#{index}_#{num_split}")
                           end
                         else
                           # create buffers for each piece
                           buffers = Array.new(num_split) do |index|
-                            _create_result_buffer(tensor.data_type, new_shape, "#{tensor.name}/out_#{index}")
+                            _create_result_buffer(tensor.data_type, new_shape, "#{tensor.name}/out_#{index}_#{num_split}")
                           end
                           buffers
                         end
