@@ -546,10 +546,10 @@ module TensorStream
         dtype = tensor.data_type
         output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
 
-        m, n = a.shape
-        work_group = [m || 1, n || 1]
+        m = a.shape.reduce(:*)
+        work_group = [m || 1, 1]
         cl_m = OpenCL::Int1.new(m || 1)
-        cl_n = OpenCL::Int1.new(n || 1)
+        cl_n = OpenCL::Int1.new(1)
 
         event = _cl_program(op_name.to_s, dtype: dtype).send(:"#{op_name}_#{dtype}", _opencl_queue, work_group, cl_m, cl_n, a.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
         output_buffer.op = event
