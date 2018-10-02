@@ -224,14 +224,14 @@ module TensorStream
         suffix = args.collect { |k, v| "#{k}.#{escape_arg_content(v)}" }.join('.')
         @context[:_cache]["_opencl_kernel_#{kernel}.#{suffix}:#{object_id}"] ||= begin
           file_path = File.join('/tmp', "#{kernel}.#{suffix}.cl")
-          source = if File.exist?(file_path)
+          source = if File.exist?(file_path) && ENV['TS_OPENCL_FILE_CACHE']
                      File.read(file_path)
                    else
                      filename = %w[cl.erb cl].map { |ext| cl_template_path(kernel, ext) }.find { |n| File.exist?(n) }
                      raise "opencl kernel template for #{kernel} has not yet been defined" if filename.nil?
                      source = File.read(filename)
                      source = OpenclTemplateHelper.new(source).generate(args)
-                     File.write(file_path, source)
+                     File.write(file_path, source) if ENV['TS_OPENCL_FILE_CACHE']
                      source
                    end
           program = _opencl_context.create_program_with_source(source)
@@ -546,14 +546,15 @@ module TensorStream
         dtype = tensor.data_type
         output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
 
-        m = a.shape.reduce(:*)
-        work_group = [m || 1, 1]
-        cl_m = OpenCL::Int1.new(m || 1)
-        cl_n = OpenCL::Int1.new(1)
+        work_group = [a.total_elements]
 
-        event = _cl_program(op_name.to_s, dtype: dtype).send(:"#{op_name}_#{dtype}", _opencl_queue, work_group, cl_m, cl_n, a.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+        event = call_program(op_name, dtype, work_group, a.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
         output_buffer.op = event
         output_buffer
+      end
+
+      def call_program(name, dtype, work_group, *args)
+        _cl_program(name.to_s, dtype: dtype).send(:"#{name}_#{dtype}", _opencl_queue, work_group, *args)
       end
 
       def auto_type_cast(a, b, name: nil)

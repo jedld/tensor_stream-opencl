@@ -1,6 +1,6 @@
 % c_dtype = dtype_to_c_type(dtype)
  // same dimension add floating point op
- __kernel void apply_adadelta_<%= dtype %>(const int M, const int N,
+ __kernel void apply_adadelta_<%= dtype %>(
                                        __global const <%= c_dtype %> *lr,
                                        __global const <%= c_dtype %> *rho,
                                        __global const <%= c_dtype %> *epsilon,
@@ -10,9 +10,7 @@
                                        __global <%= c_dtype %> *acc_update
                                        ) {
     // Get the index of the current element to be processed
-    const int globalRow = get_global_id(0); // Row ID of C (0..M)
-    const int globalCol = get_global_id(1); // Col ID of C (0..N)
-    const int index = globalRow * N + globalCol;
+    const int index = get_global_id(0);
 
     acc[index] = acc[index] * rho[0] + (grad[index] * grad[index]) * ((<%= c_dtype %>)1 - rho[0]);
     const <%= c_dtype %> update = sqrt(acc_update[index] + epsilon[0]) * rsqrt(acc[index] + epsilon[0]) * grad[index];

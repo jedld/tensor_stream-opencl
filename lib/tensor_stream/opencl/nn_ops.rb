@@ -14,16 +14,15 @@ module TensorStream
             assign.buffer.dirty = true # force buffer copy when variable is read externally
             output_buffer = assign.buffer
 
-            m, n = output_buffer.shape
-            work_group = [m || 1, n || 1]
-            cl_m = OpenCL::Int1.new(m || 1)
-            cl_n = OpenCL::Int1.new(n || 1)
+            work_group = [output_buffer.total_elements]
 
             event_wait_list = build_event_wait_list([assign.buffer, learning_rate, delta])
-            method_call = :"apply_gradient_#{output_buffer.data_type}"
-            event = _cl_program("apply_gradient", dtype: output_buffer.data_type).
-                      send(method_call, _opencl_queue, work_group, cl_m, cl_n, delta.cl_buffer,
-                           learning_rate.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+
+            event = call_program("apply_gradient", output_buffer.data_type,
+                           work_group,
+                           delta.cl_buffer,
+                           learning_rate.cl_buffer,
+                           output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer.op = event
             output_buffer
           end
@@ -39,15 +38,12 @@ module TensorStream
 
             output_buffer = assign.buffer
 
-            m, n = output_buffer.shape
-            work_group = [m || 1, n || 1]
-            cl_m = OpenCL::Int1.new(m || 1)
-            cl_n = OpenCL::Int1.new(n || 1)
+            work_group = [output_buffer.total_elements]
 
             event_wait_list = build_event_wait_list([assign.buffer, assign_acc.buffer, learning_rate, grad, momentum])
             method_call = :"apply_momentum_#{output_buffer.data_type}"
             event = _cl_program("apply_momentum", nesterov: tensor.options[:use_nesterov], dtype: output_buffer.data_type).
-                        send(method_call, _opencl_queue, work_group, cl_m, cl_n, grad.cl_buffer,
+                        send(method_call, _opencl_queue, work_group, grad.cl_buffer,
                             learning_rate.cl_buffer, momentum.cl_buffer, output_buffer.cl_buffer,
                             assign_acc.buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer.op = event
@@ -68,15 +64,11 @@ module TensorStream
 
             output_buffer = assign.buffer
 
-            m, n = output_buffer.shape
-            work_group = [m || 1, n || 1]
-            cl_m = OpenCL::Int1.new(m || 1)
-            cl_n = OpenCL::Int1.new(n || 1)
+            work_group = [output_buffer.total_elements]
 
             event_wait_list = build_event_wait_list(inputs)
-            method_call = :"apply_adadelta_#{output_buffer.data_type}"
-            event = _cl_program('apply_adadelta', dtype: output_buffer.data_type)
-                                .send(method_call, _opencl_queue, work_group, cl_m, cl_n,
+            event = call_program('apply_adadelta', output_buffer.data_type,
+                                      work_group,
                                       lr.cl_buffer,
                                       rho.cl_buffer,
                                       epsilon.cl_buffer,
@@ -106,15 +98,11 @@ module TensorStream
 
             output_buffer = assign.buffer
 
-            m, n = output_buffer.shape
-            work_group = [m || 1, n || 1]
-            cl_m = OpenCL::Int1.new(m || 1)
-            cl_n = OpenCL::Int1.new(n || 1)
+            work_group = [output_buffer.total_elements]
 
             event_wait_list = build_event_wait_list(inputs)
-            method_call = :"apply_adam_#{output_buffer.data_type}"
-            event = _cl_program("apply_adam", dtype: output_buffer.data_type)
-                                .send(method_call, _opencl_queue, work_group, cl_m, cl_n,
+            event = call_program("apply_adam", output_buffer.data_type,
+                                      work_group,
                                       grad.cl_buffer,
                                       lr_t.cl_buffer,
                                       beta1_power.cl_buffer,
@@ -142,15 +130,12 @@ module TensorStream
             assign_acc.buffer.dirty = true
             output_buffer = assign.buffer
 
-            m, n = output_buffer.shape
-            work_group = [m || 1, n || 1]
-            cl_m = OpenCL::Int1.new(m || 1)
-            cl_n = OpenCL::Int1.new(n || 1)
+            work_group = [output_buffer.total_elements]
 
             event_wait_list = build_event_wait_list(inputs)
-            method_call = :"apply_adagrad_#{output_buffer.data_type}"
-            event = _cl_program('apply_adagrad', dtype: output_buffer.data_type)
-                                .send(method_call, _opencl_queue, work_group, cl_m, cl_n,
+            event = call_program('apply_adagrad', 
+                                      output_buffer.data_type,
+                                      work_group,
                                       lr.cl_buffer,
                                       grad.cl_buffer,
                                       assign.buffer.cl_buffer,
@@ -175,10 +160,9 @@ module TensorStream
             assign_mom.buffer.dirty = true
             output_buffer = assign.buffer
             event_wait_list = build_event_wait_list(inputs)
-            cl_size = output_buffer.shape.reduce(:*) || 1
+            work_group = [output_buffer.total_elements]
 
-            event = _cl_program('apply_centered_rms_prop', dtype: output_buffer.data_type)
-                      .send(:"apply_centered_rms_prop_#{output_buffer.data_type}", _opencl_queue, [cl_size],
+            event = call_program('apply_centered_rms_prop', output_buffer.data_type, work_group,
                             lr.cl_buffer,
                             rho.cl_buffer,
                             momentum.cl_buffer,
@@ -209,10 +193,10 @@ module TensorStream
             assign_mom.buffer.dirty = true
             output_buffer = assign.buffer
             event_wait_list = build_event_wait_list(inputs)
-            cl_size = output_buffer.shape.reduce(:*) || 1
+            work_group = [output_buffer.total_elements]
 
-            event = _cl_program('apply_rms_prop', dtype: output_buffer.data_type)
-                      .send(:"apply_rms_prop_#{output_buffer.data_type}", _opencl_queue, [cl_size],
+            event = call_program('apply_rms_prop', output_buffer.data_type, 
+                            work_group,
                             lr.cl_buffer,
                             rho.cl_buffer,
                             momentum.cl_buffer,

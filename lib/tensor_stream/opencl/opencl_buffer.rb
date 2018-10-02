@@ -14,6 +14,10 @@ module TensorStream
       @op = op
     end
 
+    def total_elements
+      shape.reduce(:*) || 1
+    end
+
     def empty_value?
       @shape == [0]
     end
