@@ -162,9 +162,71 @@ module TensorStream
           end
 
           register_op :apply_centered_rms_prop do |context, tensor, inputs|
+            var, mg, ms, mom, lr, rho, momentum, epsilon, grad = inputs
+
+            assign = tensor.inputs[0]
+            assign_mg = tensor.inputs[1]
+            assign_ms = tensor.inputs[2]
+            assign_mom = tensor.inputs[3]
+
+            assign.buffer.dirty = true
+            assign_mg.buffer.dirty = true
+            assign_ms.buffer.dirty = true
+            assign_mom.buffer.dirty = true
+            output_buffer = assign.buffer
+            event_wait_list = build_event_wait_list(inputs)
+            cl_size = output_buffer.shape.reduce(:*) || 1
+
+            event = _cl_program('apply_centered_rms_prop', dtype: output_buffer.data_type)
+                      .send(:"apply_centered_rms_prop_#{output_buffer.data_type}", _opencl_queue, [cl_size],
+                            lr.cl_buffer,
+                            rho.cl_buffer,
+                            momentum.cl_buffer,
+                            epsilon.cl_buffer,
+                            grad.cl_buffer,
+                            assign.buffer.cl_buffer,
+                            assign_ms.buffer.cl_buffer,
+                            assign_mg.buffer.cl_buffer,
+                            assign_mom.buffer.cl_buffer,
+                            event_wait_list: event_wait_list)
+
+            output_buffer.op = event
+            assign_mg.buffer.op = event
+            assign_ms.buffer.op = event
+            assign_mom.buffer.op = event
+            output_buffer
           end
 
           register_op :apply_rms_prop do |context, tensor, inputs|
+            var, ms, mom, lr, rho, momentum, epsilon, grad = inputs
+
+            assign = tensor.inputs[0]
+            assign_ms = tensor.inputs[1]
+            assign_mom = tensor.inputs[2]
+
+            assign.buffer.dirty = true
+            assign_ms.buffer.dirty = true
+            assign_mom.buffer.dirty = true
+            output_buffer = assign.buffer
+            event_wait_list = build_event_wait_list(inputs)
+            cl_size = output_buffer.shape.reduce(:*) || 1
+
+            event = _cl_program('apply_rms_prop', dtype: output_buffer.data_type)
+                      .send(:"apply_rms_prop_#{output_buffer.data_type}", _opencl_queue, [cl_size],
+                            lr.cl_buffer,
+                            rho.cl_buffer,
+                            momentum.cl_buffer,
+                            epsilon.cl_buffer,
+                            grad.cl_buffer,
+                            assign.buffer.cl_buffer,
+                            assign_ms.buffer.cl_buffer,
+                            assign_mom.buffer.cl_buffer,
+                            event_wait_list: event_wait_list)
+
+            output_buffer.op = event
+            assign_ms.buffer.op = event
+            assign_mom.buffer.op = event
+            output_buffer
           end
 
           register_op :softmax do |_context, tensor, inputs|
