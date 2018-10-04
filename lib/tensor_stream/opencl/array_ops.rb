@@ -55,17 +55,18 @@ module TensorStream
                           piece_size = new_shape.reduce(:*)
                           work_group = [num_split, piece_size]
 
-                          source_multipliers = value_shape.dup.drop(1).reverse.inject([1]) do |a, s|
+                          multipliers = value_shape.dup.drop(1).reverse.inject([1]) do |a, s|
                             a << s * a.last
                           end.reverse
 
-                          dest_multipliers = new_shape.dup.drop(1).reverse.inject([1]) do |a, s|
+                          divisors = new_shape.dup.drop(1).reverse.inject([1]) do |a, s|
                             a << s * a.last
                           end.reverse
 
                           cl_piece_size = OpenCL::Int1.new(piece_size)
                           event_wait_list = build_event_wait_list(inputs)
-                          event = _cl_program('split', source: source_multipliers, dest: dest_multipliers, data_type: tensor.data_type).split(_opencl_queue, work_group,
+
+                          event = _cl_program('split', step: value_shape[axis]/num_split, axis: axis, mul: multipliers, dest: divisors, data_type: tensor.data_type).split(_opencl_queue, work_group,
                                      cl_piece_size,
                                      value.cl_buffer,
                                      work_buffer.cl_buffer,
