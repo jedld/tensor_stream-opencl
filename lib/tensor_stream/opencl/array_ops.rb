@@ -51,10 +51,30 @@ module TensorStream
                           end
                         else
                           # create buffers for each piece
-                          buffers = Array.new(num_split) do |index|
-                            _create_result_buffer(tensor.data_type, new_shape, "#{tensor.name}/out_#{index}_#{num_split}")
+                          work_buffer = _create_result_buffer(tensor.data_type, value_shape, "#{tensor.name}/out")
+                          piece_size = new_shape.reduce(:*)
+                          work_group = [num_split, piece_size]
+
+                          source_multipliers = value_shape.dup.drop(1).reverse.inject([1]) do |a, s|
+                            a << s * a.last
+                          end.reverse
+
+                          dest_multipliers = new_shape.dup.drop(1).reverse.inject([1]) do |a, s|
+                            a << s * a.last
+                          end.reverse
+
+                          cl_piece_size = OpenCL::Int1.new(piece_size)
+                          event_wait_list = build_event_wait_list(inputs)
+                          event = _cl_program('split', source: source_multipliers, dest: dest_multipliers, data_type: tensor.data_type).split(_opencl_queue, work_group,
+                                     cl_piece_size,
+                                     value.cl_buffer,
+                                     work_buffer.cl_buffer,
+                                     event_wait_list: event_wait_list)
+                          work_buffer.op = event
+
+                          Array.new(num_split) do |index|
+                            _create_result_sub_buffer(work_buffer, index, tensor.data_type, new_shape, "#{tensor.name}/out_#{index}_#{num_split}")
                           end
-                          buffers
                         end
                       else
                         buffers = num_split.each_with_index.collect do |num, index|
