@@ -1,7 +1,9 @@
+[![Gem Version](https://badge.fury.io/rb/tensor_stream.svg)](https://badge.fury.io/rb/tensor_stream)
+
 # TensorStream::Opencl
 
 This gem provides an OpenCL backend for TensorStream (https://github.com/jedld/tensor_stream). OpenCL is an open standard
-that allows running compute applications on heterogenous platforms like CPUs and GPUs.
+that allows running compute applications on heterogenous platforms like CPUs and GPUs. For certain neural network implementations, like deep neural networks GPU acceleration can dramatically speedup computation.
 
 ## Installation
 
@@ -37,7 +39,44 @@ Or install it yourself as:
 
 ## Usage
 
-Simply including this gem will allow tensor_stream to automatically select opencl devices for use in your computation
+If using a Gemfile or a framework like rails, simply including this gem will allow tensor_stream to automatically select opencl devices for use in your computation. Otherwise you can do:
+
+```ruby
+require 'tensor_stream/opencl'
+```
+
+You can check for available OpenCL devices via'
+
+```ruby
+TensorStream::Evaluator::OpenclEvaluator.query_supported_devices
+
+TensorStream::Evaluator::OpenclEvaluator.query_supported_devices.map(&:native_device)
+# => [#<OpenCL::Device: Intel(R) Core(TM) i5-5575R CPU @ 2.80GHz (4294967295)>, #<OpenCL::Device: Intel(R) Iris(TM) Pro Graphics 6200 (16925952)>]
+```
+
+## Device placement control
+
+You can place operations on certain devices using ts.device:
+
+```ruby
+# For the first GPU
+ts.device('/device:GPU:0') do
+  a = ts.placeholder(:float32, shape: [DIMEN, DIMEN])
+  b = ts.placeholder(:float32, shape: [DIMEN, DIMEN])
+  # Compute A^n and B^n and store results in c1
+  c1 << matpow(a, n)
+  c1 << matpow(b, n)
+end
+
+# For the second GPU
+ts.device('/device:GPU:1') do
+  a = ts.placeholder(:float32, shape: [DIMEN, DIMEN])
+  b = ts.placeholder(:float32, shape: [DIMEN, DIMEN])
+  # Compute A^n and B^n and store results in c1
+  c1 << matpow(a, n)
+  c1 << matpow(b, n)
+end
+```
 
 ## Development
 
