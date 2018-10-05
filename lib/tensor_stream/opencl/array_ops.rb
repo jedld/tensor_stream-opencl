@@ -36,6 +36,10 @@ module TensorStream
             axis = read_final_result(complete_eval(axis, context))
             num_split = read_final_result(complete_eval(num_split, context))
 
+            multipliers = value_shape.dup.drop(1).reverse.inject([1]) do |a, s|
+              a << s * a.last
+            end.reverse
+
             outputs = if !num_split.is_a?(Array) # scalar split
                         split_target = value_shape[axis]
                         raise TensorStream::ValueError, "#{num_split} does not divide #{split_target} evenly" if split_target % num_split != 0
@@ -55,18 +59,14 @@ module TensorStream
                           piece_size = new_shape.reduce(:*)
                           work_group = [num_split, piece_size]
 
-                          multipliers = value_shape.dup.drop(1).reverse.inject([1]) do |a, s|
-                            a << s * a.last
-                          end.reverse
-
                           divisors = new_shape.dup.drop(1).reverse.inject([1]) do |a, s|
                             a << s * a.last
                           end.reverse
 
                           cl_piece_size = OpenCL::Int1.new(piece_size)
                           event_wait_list = build_event_wait_list(inputs)
-
-                          event = _cl_program('split', step: value_shape[axis]/num_split, axis: axis, mul: multipliers, dest: divisors, data_type: tensor.data_type).split(_opencl_queue, work_group,
+                          step = value_shape[axis] / num_split
+                          event = _cl_program('split', step: step, axis: axis, mul: multipliers, dest: divisors, data_type: tensor.data_type).split(_opencl_queue, work_group,
                                      cl_piece_size,
                                      value.cl_buffer,
                                      work_buffer.cl_buffer,
@@ -78,14 +78,18 @@ module TensorStream
                           end
                         end
                       else
-                        buffers = num_split.each_with_index.collect do |num, index|
-                          new_shape = value_shape.dup
-                          new_shape[axis] = num
-                          _create_result_buffer(tensor.data_type, new_shape, "#{tensor.name}/out_#{index}")
-                        end
-
+                        # compute shapes of individual output buffers
+                        new_shapes = num_split.each_with_index.collect do |num, index|
+                                       new_shape = value_shape.dup
+                                       new_shape[axis] = num
+                                       new_shape
+                                     end
                         if axis.zero? # axis zero fast copy path
                           start = 0
+                          buffers = new_shapes.each_with_index.collect do |new_shape, index|
+                            _create_result_buffer(tensor.data_type, new_shape, "#{tensor.name}/out_#{index}")
+                          end
+
                           buffers.each do |buffer|
                             region = [buffer.buffer.size * buffer.buffer.element_size, 1, 1]
                             buffer.op = _opencl_queue.enqueue_copy_buffer_rect(value.cl_buffer, buffer.cl_buffer,
@@ -94,7 +98,39 @@ module TensorStream
                           end
                           buffers
                         else
-                          buffers
+                          # create buffers for each piece
+                          work_buffer = _create_result_buffer(tensor.data_type, value_shape, "#{tensor.name}/out")
+                          out = []
+                          start = 0
+
+                          steps = num_split.dup.reverse.drop(1).inject([0]) do |a, s|
+                            a << s + a.last
+                          end
+
+                          offsets = new_shapes.dup.reverse.drop(1).inject([0]) do |a, shape|
+                            size_bytes = shape.reduce(:*) || 1
+                            a << a.last + size_bytes
+                          end
+
+                          work_group = [new_shapes.size]
+                          shapes = new_shapes.map { |s| s[axis] }
+                          sizes = new_shapes.collect do |shape|
+                            shape.reduce(:*) || 1
+                          end
+                          event = _cl_program('split_n', offsets: offsets, sizes: sizes, shapes: shapes, steps: steps, axis: axis, mul: multipliers, data_type: tensor.data_type).split(_opencl_queue, work_group,
+                                                value.cl_buffer,
+                                                work_buffer.cl_buffer,
+                                                event_wait_list: event_wait_list)
+
+                          work_buffer.op = event
+
+                          new_shapes.each_with_index do |new_shape, index|
+                            element_count = new_shape.reduce(:*) || 1
+                            region_size_in_bytes = element_count * work_buffer.buffer.element_size
+                            out << _create_variable_result_sub_buffer(work_buffer, index, start, region_size_in_bytes, tensor.data_type, new_shape, "#{tensor.name}/out_#{index}_#{new_shape.join('.')}")
+                            start += region_size_in_bytes
+                          end
+                          out
                         end
                       end
 

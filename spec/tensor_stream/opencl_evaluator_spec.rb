@@ -12,6 +12,11 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
   it_behaves_like "optimizer evaluator"
   it_behaves_like "images ops"
 
+  describe "supported TensorStream version" do
+    it "returns the version" do
+      expect(TensorStream.version).to eq("0.8.6")
+    end
+  end
 
   def create_session
     TensorStream.session([:opencl_evaluator, :ruby_evaluator])
