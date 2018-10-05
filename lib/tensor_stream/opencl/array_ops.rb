@@ -86,17 +86,14 @@ module TensorStream
                                      end
                         if axis.zero? # axis zero fast copy path
                           start = 0
-                          buffers = new_shapes.each_with_index.collect do |new_shape, index|
-                            _create_result_buffer(tensor.data_type, new_shape, "#{tensor.name}/out_#{index}")
+                          out = []
+                          new_shapes.each_with_index do |new_shape, index|
+                            element_count = new_shape.reduce(:*) || 1
+                            region_size_in_bytes = element_count * value.buffer.element_size
+                            out << _create_variable_result_sub_buffer(value, index, start, region_size_in_bytes, tensor.data_type, new_shape, "#{tensor.name}/out_#{index}_#{new_shape.join('.')}")
+                            start += region_size_in_bytes
                           end
-
-                          buffers.each do |buffer|
-                            region = [buffer.buffer.size * buffer.buffer.element_size, 1, 1]
-                            buffer.op = _opencl_queue.enqueue_copy_buffer_rect(value.cl_buffer, buffer.cl_buffer,
-                              region, src_origin: [start, 0, 0], event_wait_list: value.op)
-                            start += buffer.buffer.size * buffer.buffer.element_size
-                          end
-                          buffers
+                          out
                         else
                           # create buffers for each piece
                           work_buffer = _create_result_buffer(tensor.data_type, value_shape, "#{tensor.name}/out")
@@ -112,17 +109,29 @@ module TensorStream
                             a << a.last + size_bytes
                           end
 
-                          work_group = [new_shapes.size]
-                          shapes = new_shapes.map { |s| s[axis] }
-                          sizes = new_shapes.collect do |shape|
-                            shape.reduce(:*) || 1
+                          events = new_shapes.each_with_index.collect do |shape, index|
+                            offset = offsets[index]
+                            step = steps[index]
+                            divisors = shape.dup.drop(1).reverse.inject([1]) do |a, s|
+                              a << s * a.last
+                            end.reverse
+                            piece_size = shape.reduce(:*) || 1
+                            work_group = [piece_size]
+                            cl_offset = OpenCL::Int1.new(offset)
+ 
+                            _cl_program('split_n', axis: axis,
+                                                           div: divisors,
+                                                           mul: multipliers,
+                                                           step: step,
+                                                           data_type: tensor.data_type).
+                                                          split(_opencl_queue,
+                                                                work_group,
+                                                                cl_offset,
+                                                                value.cl_buffer,
+                                                                work_buffer.cl_buffer,
+                                                                event_wait_list: event_wait_list)
                           end
-                          event = _cl_program('split_n', offsets: offsets, sizes: sizes, shapes: shapes, steps: steps, axis: axis, mul: multipliers, data_type: tensor.data_type).split(_opencl_queue, work_group,
-                                                value.cl_buffer,
-                                                work_buffer.cl_buffer,
-                                                event_wait_list: event_wait_list)
-
-                          work_buffer.op = event
+                          work_buffer.op = events
 
                           new_shapes.each_with_index do |new_shape, index|
                             element_count = new_shape.reduce(:*) || 1
