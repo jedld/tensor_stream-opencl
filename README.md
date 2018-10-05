@@ -59,6 +59,9 @@ TensorStream::Evaluator::OpenclEvaluator.query_supported_devices.map(&:native_de
 You can place operations on certain devices using ts.device:
 
 ```ruby
+require 'tensor_stream/opencl'
+
+ts = TensorStream
 # For the first GPU
 ts.device('/device:GPU:0') do
   a = ts.placeholder(:float32, shape: [DIMEN, DIMEN])
