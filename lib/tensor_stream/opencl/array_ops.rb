@@ -78,6 +78,7 @@ module TensorStream
                           end
                         end
                       else
+                        raise TensorStream::ValueError, "#{num_split} does not divide #{value_shape[axis]} evenly" if num_split.reduce(:+) != value_shape[axis]
                         # compute shapes of individual output buffers
                         new_shapes = num_split.each_with_index.collect do |num, index|
                                        new_shape = value_shape.dup
@@ -132,7 +133,6 @@ module TensorStream
                                                                 event_wait_list: event_wait_list)
                           end
                           work_buffer.op = events
-
                           new_shapes.each_with_index do |new_shape, index|
                             element_count = new_shape.reduce(:*) || 1
                             region_size_in_bytes = element_count * work_buffer.buffer.element_size
@@ -153,11 +153,7 @@ module TensorStream
             normal_shape = inputs[0].shape.dup
 
             axis = read_final_result(_run(axis, context))
-
-            normal_shape[0] = 0
-            inputs.each do |input|
-              normal_shape[0] += input.shape[0]
-            end
+            axis = normal_shape.size - 1 if axis == -1
 
             divisors = normal_shape.dup.drop(1).reverse.inject([1]) do |a, s|
               a << s * a.last
@@ -186,12 +182,19 @@ module TensorStream
             else
               elem_size = shape.empty? ? 1 : shape.reduce(:*)
               cl_n = OpenCL::Int1.new(elem_size)
+
+              steps = inputs.map(&:shape).reverse.drop(1).inject([0]) do |a, shape|
+                a << shape[axis] + a.last
+              end
+
               work_group = [elem_size]
               event_wait_list = build_event_wait_list(inputs)
+
               inputs.each_with_index.map do |input, index|
                 cl_index = OpenCL::Int1.new(index)
+                step = OpenCL::Int1.new(steps[index])
                 _cl_program('concat', data_type: tensor.data_type, divisors: divisors, multipliers: multipliers, axis: axis).
-                              concat(_opencl_queue, work_group, cl_n, cl_index, input.cl_buffer,
+                              concat(_opencl_queue, work_group, cl_n, cl_index, step, input.cl_buffer,
                                      output_buffer.cl_buffer, event_wait_list: event_wait_list)
               end
             end
