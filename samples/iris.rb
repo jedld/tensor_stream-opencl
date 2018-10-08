@@ -48,8 +48,6 @@ x_test.each_with_index do |x, index|
   validation_cases << [x, y_test[index]]
 end
 
-
-
 def init_weights(shape)
   # Weight initialization
   weights = TensorStream.random_normal(shape, stddev: 0.1)

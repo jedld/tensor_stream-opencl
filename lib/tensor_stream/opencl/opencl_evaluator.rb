@@ -57,7 +57,7 @@ module TensorStream
 
       def self.query_supported_devices
         devices = query_devices_with_score
-        devices.sort { |a| a[1] }.reverse.map do |d|
+        devices.sort { |a| a[1] }.map do |d|
           opencl_to_device(d)
         end
       end
@@ -85,14 +85,14 @@ module TensorStream
       # Select the best device available in the system for this evaluator
       def self.default_device
         devices = OpenclEvaluator.query_devices_with_score
-        device = devices.sort { |a| a[1] }.reverse.first
+        device = devices.sort { |a| a[1] }.first
         opencl_to_device(device)
       end
 
       # opencl evaluator main entrypoint
       def run(tensor, execution_context)
          result = complete_eval(tensor, execution_context)
-        #  puts "wait finish"
+        # puts "wait finish"
         _opencl_queue.finish
         read_final_result(result)
       end
@@ -154,6 +154,7 @@ module TensorStream
         OpenCL.platforms.flat_map do |p|
           p.devices.select { |d| d.available > 0 }.each_with_index.collect do |d, index|
             score = 0
+
             if d.type.to_s == 'CPU'
               score += 1
             elsif d.type.to_s == 'GPU'
@@ -162,8 +163,7 @@ module TensorStream
 
             score += 1000 if d.platform.name == 'NVIDIA CUDA'
 
-            score += d.max_compute_units
-            score += d.max_clock_frequency
+            score += d.max_compute_units * d.max_clock_frequency
 
             [d, score, p.name, index]
           end

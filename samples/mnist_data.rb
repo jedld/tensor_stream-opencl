@@ -9,9 +9,10 @@
 require "bundler/setup"
 require 'tensor_stream'
 require 'mnist-learn'
+# require 'pry-byebug'
 
 # Enable OpenCL hardware accelerated computation, not using OpenCL can be very slow
-# require 'tensor_stream/opencl'
+require 'tensor_stream/opencl'
 
 tf = TensorStream
 
@@ -43,10 +44,11 @@ train_step = optimizer.minimize(cross_entropy)
 sess = tf.session
 init = tf.global_variables_initializer
 sess.run(init)
-
+mnist_train = mnist.train
 (0...1000).each do |i|
   # load batch of images and correct answers
-  batch_x, batch_y = mnist.train.next_batch(100)
+  batch_x, batch_y = mnist_train.next_batch(100)
+
   train_data = { x => batch_x, y_ => batch_y }
 
   # train
