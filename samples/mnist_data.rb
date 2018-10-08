@@ -22,13 +22,37 @@ mnist = Mnist.read_data_sets('/tmp/data', one_hot: true)
 puts "downloading finished"
 
 x = tf.placeholder(:float32, shape: [nil, 784])
-w = tf.variable(tf.zeros([784, 10]))
-b = tf.variable(tf.zeros([10]))
+
+K = 200
+L = 100
+M = 60
+N = 30
 
 
+w1 = tf.variable(tf.random_normal([784, K]))
+b1 = tf.variable(tf.zeros([K]))
+
+w2 = tf.variable(tf.random_normal([K, L]))
+b2 = tf.variable(tf.zeros([L]))
+
+w3 = tf.variable(tf.random_normal([L, M]))
+b3 = tf.variable(tf.zeros([M]))
+
+w4 = tf.variable(tf.random_normal([M, N]))
+b4 = tf.variable(tf.zeros([N]))
+
+w5 = tf.variable(tf.random_normal([N, 10]))
+b5 = tf.variable(tf.zeros([10]))
+
+x_ = tf.reshape(x, [-1, 784])
+
+y1 = tf.sigmoid(tf.matmul(x_, w1) + b1)
+y2 = tf.sigmoid(tf.matmul(y1, w2) + b2)
+y3 = tf.sigmoid(tf.matmul(y2, w3) + b3)
+y4 = tf.sigmoid(tf.matmul(y3, w4) + b4)
 
 # model
-y = tf.nn.softmax(tf.matmul(tf.reshape(x, [-1, 784]), w) + b)
+y = tf.nn.softmax(tf.matmul(y4, w5) + b5)
 
 y_ = tf.placeholder(:float32, shape: [nil, 10])
 
@@ -38,11 +62,14 @@ cross_entropy = -tf.reduce_sum(y_ * tf.log(y))
 is_correct = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
 accuracy =  tf.reduce_mean(tf.cast(is_correct, :float32))
 
-optimizer = TensorStream::Train::AdamOptimizer.new
+optimizer = TensorStream::Train::GradientDescentOptimizer.new(0.003)
 train_step = optimizer.minimize(cross_entropy)
 
 sess = tf.session
+# Add ops to save and restore all the variables.
+saver = tf::Train::Saver.new
 init = tf.global_variables_initializer
+
 sess.run(init)
 mnist_train = mnist.train
 (0...1000).each do |i|
@@ -54,6 +81,8 @@ mnist_train = mnist.train
   # train
   sess.run(train_step, feed_dict: train_data)
   if (i % 10 == 0)
+    save_path = saver.save(sess, "model.ckpt")
+    print("Model saved in path: %s" % save_path)
     # success? add code to print it
     a, c = sess.run([accuracy, cross_entropy], feed_dict: train_data)
     puts "#{i} train accuracy #{a}, error #{c}"
