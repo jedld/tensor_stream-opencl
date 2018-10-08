@@ -1,4 +1,4 @@
-[![Gem Version](https://badge.fury.io/rb/tensor_stream.svg)](https://badge.fury.io/rb/tensor_stream)
+[![Gem Version](https://badge.fury.io/rb/tensor_stream-opencl.svg)](https://badge.fury.io/rb/tensor_stream-opencl)
 
 # TensorStream::Opencl
 
