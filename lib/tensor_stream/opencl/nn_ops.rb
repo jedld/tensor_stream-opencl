@@ -285,6 +285,39 @@ module TensorStream
             output_buffer
           end
 
+          register_op :sparse_softmax_cross_entropy_with_logits do |context, tensor, inputs|
+            a = inputs[0] # logits
+            labels = read_final_result(complete_eval(inputs[1], context)) # labels
+            labels = last_axis(labels)
+            num_classes = a.shape.last
+
+            labels = labels.map do |l|
+              one_hot = Array.new(num_classes) { 0 }
+              one_hot[l] = 1
+              one_hot
+            end
+
+            b = wrap_opencl(labels, data_type: inputs[0].data_type, name: "#{tensor.name}_label")
+ 
+            event_wait_list = build_event_wait_list(inputs)
+            dtype = tensor.data_type
+            output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
+            output_buffer_backprop = _create_result_buffer(tensor.data_type, a.shape, "#{tensor.name}_2")
+            rank = a.shape.size - 1
+            m, n = a.shape
+            work_group = [m]
+            n = m if n.nil?
+            cl_n = OpenCL::Int1.new(n || 1)
+
+            event = _cl_program("softmax_cross", dtype: dtype).send(:"softmax_cross_#{dtype}", _opencl_queue, work_group, cl_n, a.cl_buffer, b.cl_buffer,
+                                 output_buffer.cl_buffer, output_buffer_backprop.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.op = event
+            output_buffer_backprop.op = event
+
+            loss = reduction(context, tensor, output_buffer, rank, :sum)
+            TensorStream::Evaluator::OutputGroup.new([loss, output_buffer_backprop],  [tensor.inputs[0].data_type, tensor.inputs[0].data_type])
+          end
+
           register_op :softmax_grad do |_context, tensor, inputs|
             a, grad = inputs
 

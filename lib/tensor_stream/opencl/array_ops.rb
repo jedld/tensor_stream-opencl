@@ -202,12 +202,33 @@ module TensorStream
             output_buffer
           end
 
+          register_op :squeeze do |context, tensor, inputs|
+            arr = inputs[0]
+            shape = inputs[0].shape.dup
+            axis = !tensor.options[:axis].is_a?(Array) ? [tensor.options[:axis]] : tensor.options[:axis]
+            if !axis.empty?
+              axis.each do |axis|
+                if shape[axis] == 1
+                  shape[axis] = nil
+                else
+                  raise TensorStream::ValueError, "unable to squeeze dimension that does not have a size of 1"
+                end
+              end
+            else
+              shape = shape.map { |s| s == 1 ? nil : s }
+            end
+
+            OpenCLBuffer.new(name: tensor.name, data_type: tensor.data_type,
+              shape: shape.compact, buffer: arr.buffer,
+              cl_buffer: arr.cl_buffer,
+              op: arr.op)
+          end
+
           register_op :stack do |_context, tensor, inputs|
             axis = tensor.options[:axis] || 0
             shape = inputs[0].shape
             rank = shape.size + 1
             elem_size = shape.empty? ? 1 : shape.reduce(:*)
-
             new_shape = [inputs.size]
             shape.inject(new_shape) { |ns, s| ns << s }
 
@@ -313,8 +334,8 @@ module TensorStream
           end
 
           register_op :shape_n do |_context, tensor, inputs|
-            shapes = inputs.collect do |input|
-              wrap_opencl(input.shape, name: tensor.name, data_type: tensor.data_type)
+            shapes = inputs.collect.with_index do |input, index|
+              wrap_opencl(input.shape, name: "#{tensor.name}_#{index}", data_type: tensor.data_type)
             end
             TensorStream::Evaluator::OutputGroup.new(shapes, shapes.map { tensor.data_type })
           end

@@ -8,7 +8,7 @@
 require "bundler/setup"
 require 'tensor_stream'
 require 'tensor_stream/opencl'
-require 'pry-byebug'
+# require 'pry-byebug'
 
 
 tf = TensorStream
@@ -75,7 +75,7 @@ losses = logits_series.zip(labels_series).collect do |logits, labels|
 end
 total_loss = tf.reduce_mean(losses)
 
-train_step = TensorStream::Train::AdagradOptimizer.new(0.3).minimize(total_loss)
+train_step = TensorStream::Train::AdagradOptimizer.new(0.1).minimize(total_loss)
 
 puts "#{tf.get_default_graph.nodes.keys.size} nodes created"
 zeros_state = tf.zeros([batch_size, state_size]).eval

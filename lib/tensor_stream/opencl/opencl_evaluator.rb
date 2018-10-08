@@ -413,9 +413,11 @@ module TensorStream
         end
       rescue EvaluatorExcecutionException => e
         _opencl_queue.finish # dump queue
+        puts e.message
         raise e, "error #{e.message} while evaluating #{tensor.name} : #{tensor.to_math(true, 1)} defined at #{tensor.source}"
       rescue TensorStreamError => e
         _opencl_queue.finish # dump queue
+        puts e.message
         raise e, "error #{e.message} while evaluating #{tensor.name} : #{tensor.to_math(true, 1)} defined at #{tensor.source}"
       rescue StandardError => e
         _opencl_queue.finish # dump queue
