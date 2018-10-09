@@ -87,14 +87,12 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels }
   # train
   sess.run(train_step, feed_dict: train_data)
   if (i % 10 == 0)
-    save_path = saver.save(sess, "model.ckpt")
     # success? add code to print it
-    a, c = sess.run([accuracy, cross_entropy], feed_dict: train_data)
-    puts "#{i} train accuracy #{a}, error #{c}"
+    a_train, c_train = sess.run([accuracy, cross_entropy], feed_dict: train_data)
 
     # success on test data?
-    a, c = sess.run([accuracy, cross_entropy], feed_dict: test_data)
-    puts " test accuracy #{a}, error #{c}"
+    a_test, c_test = sess.run([accuracy, cross_entropy], feed_dict: test_data)
+    puts "#{i} train accuracy #{a_train}, error #{c_train} test accuracy #{a_test}, error #{c_test}"
   end
 end
 

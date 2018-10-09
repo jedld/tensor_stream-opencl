@@ -4,6 +4,28 @@ module TensorStream
     module ArrayOps
       def ArrayOps.included(klass)
         klass.class_eval do
+
+          #fast cached 0/1 constant fill
+          register_op %i[zeros ones zeros_like ones_like] do |context, tensor, inputs|
+            shape = if %i[zeros_like ones_like].include?(tensor.operation)
+                      inputs[0].shape
+                    elsif !inputs[0].nil?
+                      read_final_result(complete_eval(inputs[0], context))
+                    else
+                      tensor.shape.shape
+                    end
+            cache_key = "cons_#{tensor.name}_#{tensor.data_type}_#{shape}"
+            @context[:_cache][:_cl_buffers][cache_key] ||= begin
+              buffer = allocate_narray_for_type(tensor.data_type, shape.reduce(:*) || 1)
+              if %i[zeros zeros_like].include?(tensor.operation)
+                buffer.fill!(0)
+              else
+                buffer.fill!(1)
+              end
+              convert_to_opencl(buffer, shape, data_type: tensor.data_type, name: tensor.name)
+            end
+          end
+
           register_op :expand_dims, buffer: true do |_context, tensor, inputs|
             axis = inputs[1].buffer[0]
             shape = inputs[0].shape.dup

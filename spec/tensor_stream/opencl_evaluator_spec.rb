@@ -62,7 +62,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(92)
+      expect(described_class.ops.keys.size).to eq(96)
     end
 
     specify do
@@ -122,6 +122,8 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         negate
         no_op
         not_equal
+        ones
+        ones_like
         pow
         print
         prod
@@ -159,6 +161,8 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         unstack
         variable
         where
+        zeros
+        zeros_like
       ])
     end
 
