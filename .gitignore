@@ -8,6 +8,7 @@
 /tmp/
 Gemfile.lock
 *.gem
+*.ckpt
 
 # rspec failure tracking
 .rspec_status

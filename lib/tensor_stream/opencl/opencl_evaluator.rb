@@ -687,7 +687,8 @@ module TensorStream
 
       def _create_result_buffer(data_type, shape, name)
         return OpenCLBuffer.new(name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil) if shape == [0]
-        @context[:_cache][:_cl_buffers]["_result_#{name}_#{shape.join('_')}:#{object_id}"] ||= begin
+        cache_key = "_result_#{name}_#{shape.join('_')}:#{object_id}"
+        @context[:_cache][:_cl_buffers][cache_key] ||= begin
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
           buffer =  allocate_narray_for_type(data_type, size)
           cl_buffer = _opencl_context.create_buffer(buffer.size * buffer.element_size)
