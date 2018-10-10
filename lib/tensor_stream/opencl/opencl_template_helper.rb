@@ -32,10 +32,18 @@ class OpenclTemplateHelper
     case dtype.to_s
     when 'float64'
       'double'
-    when 'float32', 'float'
+    when 'float32', 'float', 'float16'
       'float'
+    when 'uint32'
+      'uint'
+    when 'int64'
+      'int' # 'long' - NArray does not support 64bit int types
+    when 'uint64'
+      'uint'  # 'ulong' - NArray does not support 64bit int types
     when 'int32', 'int'
       'int'
+    when 'uint16'
+      'ushort'
     when 'int16'
       'short'
     when 'uint8'
@@ -51,10 +59,12 @@ class OpenclTemplateHelper
     case dtype.to_s
     when 'float64'
       'DBL_MIN'
-    when 'float32', 'float'
+    when 'float32', 'float', 'float16'
       'FLT_MIN'
     when 'int32', 'int'
       'INT_MIN'
+    when 'uint32', 'uint16'
+      '0'
     when 'int16'
       'SHRT_MIN'
     when 'int8'

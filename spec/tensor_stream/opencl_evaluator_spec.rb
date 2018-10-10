@@ -181,7 +181,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
   end
 
   describe "data types" do
-    %i[int32 int16 int].each do |dtype|
+    TensorStream::Ops::INTEGER_TYPES.each do |dtype|
       context "#{dtype}" do
         specify do
           a = tf.constant([1, 2, 3, 4, 5], dtype: dtype)
@@ -189,14 +189,14 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
           f = a + b
           g = a * b
           h = a / b
-          j = a - b
+          j = a % b
 
-          expect(sess.run(f, g, h, j)).to eq([[6, 8, 10, 12, 14], [5, 12, 21, 32, 45], [0, 0, 0, 0, 0], [-4, -4, -4, -4, -4]])
+          expect(sess.run(f, g, h, j)).to eq([[6, 8, 10, 12, 14], [5, 12, 21, 32, 45], [0, 0, 0, 0, 0], [1, 2, 3, 4, 5]])
         end
       end
     end
 
-    %i[float32 float64].each do |dtype|
+    TensorStream::Ops::FLOATING_POINT_TYPES.each do |dtype|
       context "#{dtype}" do
         specify do
           a = tf.constant([1, 2, 3, 4, 5], dtype: dtype)

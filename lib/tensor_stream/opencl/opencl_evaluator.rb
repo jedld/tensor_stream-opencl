@@ -664,15 +664,15 @@ module TensorStream
 
       def allocate_narray_for_type(data_type, narray_size)
         case data_type
-        when :float, :float32
+        when :float, :float32, :float16
           NArray.sfloat(narray_size)
         when :float64
           NArray.float(narray_size)
-        when :int, :int32, :int64
+        when :int, :int32, :int64, :uint64, :uint32 #NArray does not have 64 bit int types
           NArray.int(narray_size)
-        when :int16
+        when :int16, :uint16
           NArray.sint(narray_size)
-        when :uint8
+        when :uint8, :int8
           NArray.byte(narray_size)
         when :boolean
           NArray.byte(narray_size)

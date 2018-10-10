@@ -71,11 +71,15 @@ learning_rate = 0.003
 train_step = TensorStream::Train::AdamOptimizer.new(learning_rate).minimize(cross_entropy)
 
 sess = tf.session
+init = tf.global_variables_initializer
+sess.run(init)
+
 # Add ops to save and restore all the variables.
 saver = tf::Train::Saver.new
-init = tf.global_variables_initializer
+if File.exist?('model.ckpt')
+  saver.restore(sess, 'model.ckpt')
+end
 
-sess.run(init)
 mnist_train = mnist.train
 test_data = { x => mnist.test.images, y_ => mnist.test.labels }
 
@@ -86,7 +90,8 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels }
 
   # train
   sess.run(train_step, feed_dict: train_data)
-  if (i % 10 == 0)
+  if (i % 50 == 0)
+    saver.save(sess, 'model.ckpt')
     # success? add code to print it
     a_train, c_train = sess.run([accuracy, cross_entropy], feed_dict: train_data)
 

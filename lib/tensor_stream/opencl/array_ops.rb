@@ -38,9 +38,11 @@ module TensorStream
           register_op :fill, buffer: true do |_context, tensor, inputs|
             shape = inputs[0]
             value = inputs[1]
+            
+            fill_shape = shape.nil? ? tensor.shape.shape : shape.buffer.to_a
+            narray_size = fill_shape.reduce(:*) || 1
 
-            narray_size = shape.buffer.to_a.reduce(:*) || 1
-            cl_buffer = get_cached_buffer(tensor.name, shape.buffer.to_a)
+            cl_buffer = get_cached_buffer(tensor.name, fill_shape)
 
             buffer = if cl_buffer
                        cl_buffer.buffer
@@ -49,7 +51,7 @@ module TensorStream
                      end
 
             buffer.fill!(value.buffer[0])
-            convert_to_opencl(buffer, shape.buffer.to_a, data_type: tensor.data_type, name: tensor.name)
+            convert_to_opencl(buffer, fill_shape, data_type: tensor.data_type, name: tensor.name)
           end
 
           register_op :split do |context, tensor, inputs|
