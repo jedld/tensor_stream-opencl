@@ -62,6 +62,11 @@ softmax = tf.nn.softmax(a)
 add_n = tf.add_n([a,b,c,d])
 split = tf.split(a, 4)
 
+chain = tf.sin(a)
+10.times do
+  chain = tf.sin(chain)
+end
+
 puts TensorStream::Evaluator.default_evaluators
 
 sess2 = tf.session
@@ -70,6 +75,8 @@ puts `cat /proc/cpuinfo | grep "model name" | head -1`
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
+  x.report("pure ruby sin chain      :") { 100.times do sess.run(chain) end }
+  x.report("opencl sin chain      :")   { 100.times do sess2.run(chain) end }
   x.report("pure ruby split          :") { 100.times do sess.run(split) end }
   x.report("opencl split             :") { 100.times do sess2.run(split) end }
   x.report("pure ruby add_n          :") { 100.times do sess.run(add_n) end }
