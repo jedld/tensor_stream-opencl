@@ -11,7 +11,6 @@ DIMEN = 1024
 A = ts.random_uniform([DIMEN, DIMEN]).eval
 B = ts.random_uniform([DIMEN, DIMEN]).eval
 
-
 # Create a graph to store results
 c1 = []
 c2 = []

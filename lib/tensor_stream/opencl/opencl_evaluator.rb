@@ -58,7 +58,7 @@ module TensorStream
 
       def self.query_supported_devices
         devices = query_devices_with_score
-        devices.sort { |a| a[1] }.map do |d|
+        devices.sort { |a, b| a[1] <=> b[1] }.map do |d|
           opencl_to_device(d)
         end
       end
@@ -86,7 +86,7 @@ module TensorStream
       # Select the best device available in the system for this evaluator
       def self.default_device
         devices = OpenclEvaluator.query_devices_with_score
-        device = devices.max { |a| a[1] }
+        device = devices.max { |a, b| a[1] <=> b[1] }
         opencl_to_device(device)
       end
 
