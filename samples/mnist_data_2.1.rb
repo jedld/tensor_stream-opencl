@@ -16,6 +16,9 @@ require 'tensor_stream/opencl'
 
 tf = TensorStream
 
+puts "Tensorstream version #{tf.__version__} with OpenCL lib #{TensorStream::Opencl::VERSION}"
+tf.set_random_seed(0)
+
 # Import MNIST data
 puts "downloading minst data"
 mnist = Mnist.read_data_sets('/tmp/data', one_hot: true)
@@ -74,16 +77,10 @@ sess = tf.session
 init = tf.global_variables_initializer
 sess.run(init)
 
-# Add ops to save and restore all the variables.
-saver = tf::Train::Saver.new
-if File.exist?('model.ckpt')
-  saver.restore(sess, 'model.ckpt')
-end
-
 mnist_train = mnist.train
 test_data = { x => mnist.test.images, y_ => mnist.test.labels }
 
-(0..1000).each do |i|
+(0..10000).each do |i|
   # load batch of images and correct answers
   batch_x, batch_y = mnist_train.next_batch(100)
   train_data = { x => batch_x, y_ => batch_y }
@@ -91,7 +88,6 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels }
   # train
   sess.run(train_step, feed_dict: train_data)
   if (i % 50 == 0)
-    saver.save(sess, 'model.ckpt')
     # success? add code to print it
     a_train, c_train = sess.run([accuracy, cross_entropy], feed_dict: train_data)
 

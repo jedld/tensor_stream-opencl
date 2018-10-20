@@ -38,7 +38,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "pry-byebug"
   spec.add_development_dependency "awesome_print"
   spec.add_development_dependency "mnist-learn"
-  spec.add_dependency "tensor_stream", "~> 0.9.0"
+  spec.add_dependency "tensor_stream", "~> 0.9.1"
   spec.add_dependency "opencl_ruby_ffi"
   spec.add_dependency "oily_png"
 end

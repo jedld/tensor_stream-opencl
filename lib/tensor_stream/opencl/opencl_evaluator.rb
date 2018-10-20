@@ -38,7 +38,8 @@ module TensorStream
     # PURE ruby evaluator used for testing and development
     class OpenclEvaluator < BaseEvaluator
       attr_accessor :retain
-      attr_reader :opencl_device
+      attr_reader :opencl_device, :opencl_context
+      attr_writer :context
 
       include TensorStream::OpHelper
       include TensorStream::ArrayOpsHelper
@@ -50,7 +51,7 @@ module TensorStream
 
       def initialize(session, device, thread_pool: nil, log_intermediates: false)
         super
-        _create_opencl_context(device.native_device)
+        _create_opencl_context
         @opencl_device = device.native_device
         create_command_queue
       end
@@ -68,16 +69,16 @@ module TensorStream
         opencl_to_device(platform_devices[[query[1].to_i, platform_devices.size - 1].min])
       end
 
-      def self.opencl_to_device(d)
-        device = d[0]
-        index = d[3]
+      def self.opencl_to_device(dev)
+        device = dev[0]
+        index = dev[3]
         platform_name = device.platform.name.tr(' ', '_').downcase
         uri = [platform_name, index].join(':')
 
         device_type = device.type.to_s == 'GPU' ? :gpu : :cpu
 
-        OpenclDevice.new(uri, device_type, self).tap do |devide|
-          devide.native_device = device
+        OpenclDevice.new(uri, device_type, self).tap do |d|
+          d.native_device = device
         end
       end
 
@@ -85,14 +86,14 @@ module TensorStream
       # Select the best device available in the system for this evaluator
       def self.default_device
         devices = OpenclEvaluator.query_devices_with_score
-        device = devices.sort { |a| a[1] }.first
+        device = devices.max { |a| a[1] }
         opencl_to_device(device)
       end
 
       # opencl evaluator main entrypoint
       def run(tensor, execution_context)
-         result = complete_eval(tensor, execution_context)
-        # puts "wait finish"
+        result = complete_eval(tensor, execution_context)
+        # puts "-------------------wait finish------------------------"
         _opencl_queue.finish
         read_final_result(result)
       end
@@ -115,18 +116,22 @@ module TensorStream
       # buffer comes from non-opencl evaluator
       def convert_from_buffer(tensor, result)
         if result.buffer.is_a?(TensorStream::Evaluator::OutputGroup)
-          converted_outputs = result.buffer.outputs.zip(result.buffer.data_types).map { |output, data_type| convert_to_opencl([output].flatten, shape_eval(output), data_type: data_type, name: tensor.name) }
+          converted_outputs = result.buffer.outputs.zip(result.buffer.data_types).map do |output, data_type|
+            convert_to_opencl([output].flatten, shape_eval(output), data_type: data_type, name: tensor.name)
+          end
           TensorStream::Evaluator::OutputGroup.new(converted_outputs, result.buffer.data_types)
         else
           convert_to_opencl([result.buffer].flatten, shape_eval(result.buffer), data_type: result.data_type, name: tensor.name)
         end
       end
 
+      # Generate OpenCL instruction to read back from GPU memory to Host memory for a tensor
       def enqueue_buffer_read(tensor, context)
         buffer = _run(tensor, context)
         if buffer.is_a?(Array)
           buffer.collect do |b|
             next b if b.buffer.size.zero?
+
             b.op = _opencl_queue.enqueue_read_buffer(b.cl_buffer, b.buffer, event_wait_list: build_event_wait_list([b]))
             b
           end
@@ -135,6 +140,7 @@ module TensorStream
           return buffer if buffer.nil?
           return [] if buffer.buffer.nil?
           return buffer if buffer.buffer.size.zero?
+
           buffer.op = _opencl_queue.enqueue_read_buffer(buffer.cl_buffer, buffer.buffer, event_wait_list: build_event_wait_list([buffer]))
           buffer
         end
@@ -145,7 +151,7 @@ module TensorStream
 
         buffer = enqueue_buffer_read(tensor, context)
         events = build_event_wait_list([buffer])
-        # puts "wait #{tensor.name}"
+        # puts "** wait #{tensor.name} **"
         OpenCL.wait_for_events(events) unless events.empty?
         buffer
       end
@@ -172,6 +178,31 @@ module TensorStream
 
       protected
 
+      ##
+      # called when passing control to another evaluator
+      def perform_transition(tensor, input, next_evaluator, execution_context)
+        if next_evaluator.is_a?(OpenclEvaluator) # OpenCL but different device?
+          # create opencl buffer for this tensor
+          next_evaluator.context = @context
+
+          foreign_buffer = next_evaluator._run(input, execution_context)
+          event_list = build_event_wait_list([foreign_buffer])
+
+          output_buffer = _create_result_buffer(input.data_type, foreign_buffer.shape, "t_#{input.name}")
+          output_buffer.op = if next_evaluator.opencl_context == @opencl_context
+                               _opencl_queue.enqueue_copy_buffer(foreign_buffer.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_list)
+                             else
+                               puts "wait finish transition ** #{tensor.name} **"
+                               read_event = next_evaluator._opencl_queue.enqueue_read_buffer(foreign_buffer.cl_buffer, output_buffer.buffer, event_wait_list: event_list)
+                               OpenCL.wait_for_events(read_event)
+                               _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
+                             end
+          output_buffer
+        else
+          super
+        end
+      end
+
       def prepare_input(tensor, context, options = {})
         return nil unless tensor
 
@@ -195,8 +226,19 @@ module TensorStream
         buffer.to_ruby
       end
 
-      def _create_opencl_context(opencl_device)
-        @opencl_context = OpenCL.create_context(opencl_device)
+      def _create_opencl_context(device = nil)
+        if device.nil?
+          @@global_opencl_context ||= begin
+            all_devices = OpenclEvaluator.query_supported_devices.map(&:native_device)
+            puts "global context created for #{all_devices}"
+            OpenCL.create_context(all_devices)
+          end
+
+          @opencl_context = @@global_opencl_context
+        else
+          puts "context created for #{device.native_device}"
+          @opencl_context = OpenCL.create_context(device.native_device)
+        end
       end
 
       def create_command_queue
@@ -205,6 +247,7 @@ module TensorStream
         properties = []
         properties << OpenCL::CommandQueue::PROFILING_ENABLE if supported_proprties.include?('PROFILING_ENABLE')
         properties << OpenCL::CommandQueue::OUT_OF_ORDER_EXEC_MODE_ENABLE if supported_proprties.include?('OUT_OF_ORDER_EXEC_MODE_ENABLE')
+        # puts "creating queue with properties #{supported_proprties}"
         @command_queue = _opencl_context.create_command_queue(opencl_device, properties: properties)
       end
 
@@ -222,28 +265,32 @@ module TensorStream
 
       def _cl_program(kernel, args = {})
         suffix = args.collect { |k, v| "#{k}.#{escape_arg_content(v)}" }.join('.')
-        @context[:_cache]["_opencl_kernel_#{kernel}.#{suffix}:#{object_id}"] ||= begin
-          file_path = File.join('/tmp', "#{kernel}.#{suffix}.cl")
-          source = if File.exist?(file_path) && ENV['TS_OPENCL_FILE_CACHE']
-                     File.read(file_path)
-                   else
-                     filename = %w[cl.erb cl].map { |ext| cl_template_path(kernel, ext) }.find { |n| File.exist?(n) }
-                     raise "opencl kernel template for #{kernel} has not yet been defined" if filename.nil?
-                     source = File.read(filename)
-                     source = OpenclTemplateHelper.new(source).generate(args)
-                     File.write(file_path, source) if ENV['TS_OPENCL_FILE_CACHE']
-                     source
-                   end
-          program = _opencl_context.create_program_with_source(source)
-          program.build
-        rescue OpenCL::Error::BUILD_PROGRAM_FAILURE => e
-          puts "OpenCL Compile error: #{program.build_log}"
-          raise e
-        end
+        kernel_cache_key = "_opencl_kernel_#{kernel}.#{suffix}:#{object_id}"
+        @context[:_cache][kernel_cache_key] ||=
+          begin
+            # puts "building #{kernel_cache_key}"
+            file_path = File.join('/tmp', "#{kernel}.#{suffix}.cl")
+            source = if File.exist?(file_path) && ENV['TS_OPENCL_FILE_CACHE']
+                       File.read(file_path)
+                     else
+                       filename = %w[cl.erb cl].map { |ext| cl_template_path(kernel, ext) }.find { |n| File.exist?(n) }
+                       raise "opencl kernel template for #{kernel} has not yet been defined" if filename.nil?
+
+                       source = File.read(filename)
+                       source = OpenclTemplateHelper.new(source).generate(args)
+                       File.write(file_path, source) if ENV['TS_OPENCL_FILE_CACHE']
+                       source
+                     end
+            program = _opencl_context.create_program_with_source(source)
+            program.build
+          rescue OpenCL::Error::BUILD_PROGRAM_FAILURE => e
+            puts "OpenCL Compile error: #{program.build_log}"
+            raise e
+          end
       end
 
       def escape_arg_content(value)
-        return value.tr(' ','_') if value.is_a?(String)
+        return value.tr(' ', '_') if value.is_a?(String)
         return value.join('-') if value.is_a?(Array)
 
         value
@@ -257,9 +304,8 @@ module TensorStream
 
         child_context = execution_context.dup
         res = if tensor.is_a?(Operation)
-                if !self.class.ops.include?(tensor.operation.to_sym)
-                  result = @session.delegate_to_evaluator(tensor, @context, execution_context)
-                  convert_from_buffer(tensor, result)
+                if !on_same_device?(tensor) # tensor is on another device or evaluator
+                  perform_transition(tensor, tensor, @context[:_cache][:placement][tensor.name][1], execution_context)
                 else
                   eval_operation(tensor, child_context)
                 end
@@ -375,6 +421,7 @@ module TensorStream
 
       register_op :flow_group do |_context, _tensor, inputs|
         events = build_event_wait_list(inputs)
+        # puts "** wait for event flow_group**"
         OpenCL.wait_for_events(events) unless events.empty?
         nil
       end
@@ -387,8 +434,10 @@ module TensorStream
         cache_key = "#{tensor.graph.object_id}_opencl_#{tensor.name}:#{object_id}"
         return @context[:_cache][cache_key] if @context[:_cache].key?(cache_key)
         return @context[cache_key] if @context.key?(cache_key)
-        # puts "opencl: #{tensor.name}"
+
+        # puts "opencl eval #{object_id} #{tensor.name}"
         invoke(tensor, child_context).tap do |result|
+          # puts "result done opencl #{object_id}: #{tensor.name}"
           if tensor.breakpoint
             a = resolve_placeholder(tensor.inputs[0], child_context) if tensor.inputs && tensor.inputs[0]
             b = resolve_placeholder(tensor.inputs[1], child_context) if tensor.inputs && tensor.inputs[1]
@@ -603,6 +652,7 @@ module TensorStream
       end
 
       def convert_to_opencl(value, shape, data_type: nil, name: nil)
+        # puts "convert_to_opencl called for #{name}"
         value = [value] if !value.is_a?(Array) && !value.is_a?(NArray)
 
         cache_key = "_cl_object_#{name}:#{shape.join('_')}:#{object_id}"
@@ -689,6 +739,7 @@ module TensorStream
         return OpenCLBuffer.new(name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil) if shape == [0]
         cache_key = "_result_#{name}_#{shape.join('_')}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
+          # puts "create result buffer #{cache_key}"
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
           buffer =  allocate_narray_for_type(data_type, size)
           cl_buffer = _opencl_context.create_buffer(buffer.size * buffer.element_size)
@@ -807,6 +858,7 @@ module TensorStream
           convert_to_opencl(red, [], data_type: tensor.data_type, name: tensor.name)
         else
           return input if input.shape.empty?
+
           value = input.buffer.reshape(*input.shape.reverse)
           rank = input.shape.size - 1
 
@@ -863,17 +915,15 @@ module TensorStream
 
       def resolve_placeholder(placeholder, _execution_context = {})
         return nil if placeholder.nil?
+        return placeholder unless  placeholder.is_a?(Placeholder)
 
-        var = if placeholder.is_a?(Placeholder)
-                @context[placeholder.name.to_sym].tap do |c|
-                  raise "missing placeholder #{placeholder.name}" if c.nil?
-                end
-              else
-                placeholder
-              end
+        var = @context[placeholder.name.to_sym]
+        raise "missing placeholder #{placeholder.name}" if var.nil?
 
-        return convert_to_opencl(var, shape_eval(var), data_type: placeholder.data_type, name: placeholder.name) unless var.is_a?(Tensor)
-        Tensor.cast_dtype(var, placeholder.data_type)
+        cache_key = "#{placeholder.graph.object_id}_opencl_#{placeholder.name}:#{object_id}"
+        @context[cache_key] ||= begin
+          convert_to_opencl(var, shape_eval(var), data_type: placeholder.data_type, name: placeholder.name) unless var.is_a?(Tensor)
+        end
       end
 
       def all_true?(arr)
