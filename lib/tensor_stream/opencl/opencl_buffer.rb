@@ -3,15 +3,16 @@ module TensorStream
   class OpenCLBuffer < Buffer
     include ArrayOpsHelper
 
-    attr_accessor :shape, :buffer, :cl_buffer, :op
+    attr_accessor :shape, :buffer, :cl_buffer, :op, :owner
 
-    def initialize(data_type:, shape:, buffer:, cl_buffer:, op: nil, name: nil)
+    def initialize(owner, data_type:, shape:, buffer:, cl_buffer:, op: nil, name: nil)
       @data_type = data_type
       @shape = shape
       @buffer = buffer
       @cl_buffer = cl_buffer
       @name = name
       @op = op
+      @owner = owner
     end
 
     def total_elements

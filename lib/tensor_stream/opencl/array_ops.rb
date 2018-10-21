@@ -38,7 +38,7 @@ module TensorStream
           register_op :fill, buffer: true do |_context, tensor, inputs|
             shape = inputs[0]
             value = inputs[1]
-            
+
             fill_shape = shape.nil? ? tensor.shape.shape : shape.buffer.to_a
             narray_size = fill_shape.reduce(:*) || 1
 
@@ -143,7 +143,7 @@ module TensorStream
                             piece_size = shape.reduce(:*) || 1
                             work_group = [piece_size]
                             cl_offset = OpenCL::Int1.new(offset)
- 
+
                             _cl_program('split_n', axis: axis,
                                                            div: divisors,
                                                            mul: multipliers,
@@ -242,7 +242,7 @@ module TensorStream
               shape = shape.map { |s| s == 1 ? nil : s }
             end
 
-            OpenCLBuffer.new(name: tensor.name, data_type: tensor.data_type,
+            OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type,
               shape: shape.compact, buffer: arr.buffer,
               cl_buffer: arr.cl_buffer,
               op: arr.op)
@@ -374,7 +374,7 @@ module TensorStream
                       TensorShape.fix_inferred_elements(new_shape, arr.buffer.size)
                     end
 
-            OpenCLBuffer.new(name: tensor.name, data_type: tensor.data_type,
+            OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type,
                              shape: shape, buffer: arr.buffer,
                              cl_buffer: arr.cl_buffer,
                              op: arr.op)

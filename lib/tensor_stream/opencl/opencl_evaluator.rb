@@ -188,11 +188,11 @@ module TensorStream
           foreign_buffer = next_evaluator._run(input, execution_context)
           event_list = build_event_wait_list([foreign_buffer])
 
-          output_buffer = _create_result_buffer(input.data_type, foreign_buffer.shape, "t_#{input.name}")
+          output_buffer = _create_result_buffer(input.data_type, foreign_buffer.shape, "t_#{tensor.name}_#{input.name}")
           output_buffer.op = if next_evaluator.opencl_context == @opencl_context
                                _opencl_queue.enqueue_copy_buffer(foreign_buffer.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_list)
                              else
-                               puts "wait finish transition ** #{tensor.name} **"
+                               puts "wait finish transition ** #{input.name} **"
                                read_event = next_evaluator._opencl_queue.enqueue_read_buffer(foreign_buffer.cl_buffer, output_buffer.buffer, event_wait_list: event_list)
                                OpenCL.wait_for_events(read_event)
                                _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
@@ -341,7 +341,7 @@ module TensorStream
 
       register_op :identity do |context, tensor, inputs|
         value = inputs[0]
-        buffer = OpenCLBuffer.new(name: tensor.name, data_type: tensor.data_type, shape: value.shape, buffer: value.buffer, cl_buffer: value.cl_buffer)
+        buffer = OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type, shape: value.shape, buffer: value.buffer, cl_buffer: value.cl_buffer)
         buffer.op = build_event_wait_list(inputs)
         buffer
       end
@@ -680,7 +680,7 @@ module TensorStream
                                     _opencl_context.create_buffer(cl_buffer_size * buffer.element_size)
                                   end
 
-                      @context[:_cache][cache_key] = OpenCLBuffer.new(name: name, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer)
+                      @context[:_cache][cache_key] = OpenCLBuffer.new(self, name: name, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer)
                     end
         if data_type == :string
           value[0].each_byte.with_index do |c, index|
@@ -736,14 +736,14 @@ module TensorStream
       end
 
       def _create_result_buffer(data_type, shape, name)
-        return OpenCLBuffer.new(name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil) if shape == [0]
+        return OpenCLBuffer.new(self, name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil) if shape == [0]
         cache_key = "_result_#{name}_#{shape.join('_')}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           # puts "create result buffer #{cache_key}"
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
           buffer =  allocate_narray_for_type(data_type, size)
           cl_buffer = _opencl_context.create_buffer(buffer.size * buffer.element_size)
-          OpenCLBuffer.new(data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
+          OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
         end
       end
 
@@ -758,7 +758,7 @@ module TensorStream
             start = index * buffer.size * buffer.element_size
             region = OpenCL::BufferRegion::new(start, buffer.size * buffer.element_size)
             cl_buffer = parent_buffer.cl_buffer.create_sub_buffer(OpenCL::BUFFER_CREATE_TYPE_REGION, region)
-            OpenCLBuffer.new(data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
+            OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
           else
             _create_result_buffer(tensor.data_type, shape, name)
           end
@@ -780,7 +780,7 @@ module TensorStream
 
       # create sub buffers of different sizes
       def _create_variable_result_sub_buffer(parent_buffer, index, start, region_size_in_bytes, data_type, shape, name)
-        cache_key ="_sub_result_#{parent_buffer.object_id}_#{name}_#{index}:#{object_id}"
+        cache_key = "_sub_result_#{parent_buffer.object_id}_#{name}_#{index}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
           buffer = allocate_narray_for_type(data_type, size)
@@ -788,7 +788,7 @@ module TensorStream
           if parent_buffer.cl_buffer.associated_memobject.nil?
             region = OpenCL::BufferRegion::new(start, region_size_in_bytes)
             cl_buffer = parent_buffer.cl_buffer.create_sub_buffer(OpenCL::BUFFER_CREATE_TYPE_REGION, region)
-            OpenCLBuffer.new(data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: "#{name}/sub")
+            OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: "#{name}/sub")
           else
             _create_result_buffer(tensor.data_type, shape, name)
           end
@@ -915,12 +915,12 @@ module TensorStream
 
       def resolve_placeholder(placeholder, _execution_context = {})
         return nil if placeholder.nil?
-        return placeholder unless  placeholder.is_a?(Placeholder)
+        return placeholder unless placeholder.is_a?(Placeholder)
 
         var = @context[placeholder.name.to_sym]
         raise "missing placeholder #{placeholder.name}" if var.nil?
 
-        cache_key = "#{placeholder.graph.object_id}_opencl_#{placeholder.name}:#{object_id}"
+        cache_key = "#{placeholder.graph.object_id}_opencl_#{placeholder.name}_p:#{object_id}"
         @context[cache_key] ||= begin
           convert_to_opencl(var, shape_eval(var), data_type: placeholder.data_type, name: placeholder.name) unless var.is_a?(Tensor)
         end

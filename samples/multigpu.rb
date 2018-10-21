@@ -37,15 +37,18 @@ end
 t1_1 = nil
 t2_1 = nil
 puts "===================== starting single GPU test ================"
-ts.session(log_device_placement: true) do |sess|
+ts.session(log_device_placement: true, profile_enabled: true) do |sess|
+  puts "-- warmup ---"
   sess.run(sum, feed_dict: { a => A, b => B}) # warmup
+  puts "-- warmup ---"
   time = Time.now
   t1_1 = time.to_i * (10 ** 9) + time.nsec
   sess.run(sum, feed_dict: { a => A, b => B})
   time = Time.now
   t2_1 = time.to_i * (10 ** 9) + time.nsec
 end
-
+puts "===================== end single GPU test ================"
+puts "===================== MULTI GPU text ================"
 # Multi GPU computing
 # GPU:0 computes A^n
 ts.device('/device:GPU:0') do
@@ -59,16 +62,18 @@ ts.device('/device:GPU:1') do
   c2 << matpow(b, n)
 end
 
-ts.device('/device:GPU:1') do
+ts.device('/device:GPU:0') do
   sum = ts.add_n(c2) #Addition of all elements in c2, i.e. A^n + B^n
 end
 
 t1_2 = nil
 t2_2 = nil
 
-ts.session(log_device_placement: true) do |sess|
+ts.session(log_device_placement: true, profile_enabled: true) do |sess|
     # Run the op.
+    puts "-- warmup ---"
     sess.run(sum, feed_dict: {a => A, b => B}) # warm up
+    puts "-- warmup ---"
     time = Time.now
     t1_2 = time.to_i * (10 ** 9) + time.nsec
     puts "================ starting multiGPU test ==============="
