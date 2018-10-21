@@ -368,7 +368,7 @@ module TensorStream
       end
 
       %i[less less_equal greater greater_equal equal not_equal logical_and].each do |op|
-        register_op op, noop: true do |context, tensor, inputs|
+        register_op op do |context, tensor, inputs|
           execute_2_operand_func(op.to_s, tensor, inputs[0], inputs[1], context, 'cond')
         end
       end
@@ -528,9 +528,7 @@ module TensorStream
         assign.buffer
       end
 
-      def execute_2_operand_func(op_name, tensor, input_a, input_b, child_context, prog_name = nil)
-        a = _run(input_a, child_context)
-        b = _run(input_b, child_context)
+      def execute_2_operand_func(op_name, tensor, a, b, child_context, prog_name = nil)
         a, b = auto_type_cast(a, b, name: "#{tensor.name}/cast_#{a.name}_#{b.data_type}")
         dtype = tensor.data_type
         result_shape = TensorShape.infer_shape(a.shape, b.shape)

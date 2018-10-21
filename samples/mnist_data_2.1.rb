@@ -73,7 +73,7 @@ accuracy =  tf.reduce_mean(tf.cast(is_correct, :float32))
 learning_rate = 0.003
 train_step = TensorStream::Train::AdamOptimizer.new(learning_rate).minimize(cross_entropy)
 
-sess = tf.session
+sess = tf.session(profile_enabled: true)
 init = tf.global_variables_initializer
 sess.run(init)
 
@@ -88,6 +88,8 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels }
   # train
   sess.run(train_step, feed_dict: train_data)
   if (i % 50 == 0)
+    # File.write("profile.json", TensorStream::ReportTool.profile_for(sess).sort { |a, b| b[1] <=> a[1] }.to_json)
+    # generate profile
     # success? add code to print it
     a_train, c_train = sess.run([accuracy, cross_entropy], feed_dict: train_data)
 

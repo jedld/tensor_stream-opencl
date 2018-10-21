@@ -9,6 +9,7 @@
 Gemfile.lock
 *.gem
 *.ckpt
+profile.json
 
 # rspec failure tracking
 .rspec_status

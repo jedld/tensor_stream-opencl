@@ -5,7 +5,7 @@ module TensorStream
       def MathOps.included(klass)
         klass.class_eval do
           %i[max min add real_div div sub floor_mod mod mul pow sigmoid_grad squared_difference].each do |op|
-            register_op op, noop: true do |context, tensor, inputs|
+            register_op op do |context, tensor, inputs|
               execute_2_operand_func(op.to_s, tensor, inputs[0], inputs[1], context)
             end
           end
@@ -38,7 +38,7 @@ module TensorStream
             end
           end
 
-          register_op :floor_div, noop: true do |context, tensor, inputs|
+          register_op :floor_div do |context, tensor, inputs|
             if fp_type?(tensor.data_type)
               execute_2_operand_func('floor_div', tensor, inputs[0], inputs[1], context)
             else
