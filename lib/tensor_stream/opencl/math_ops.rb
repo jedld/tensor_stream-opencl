@@ -107,25 +107,25 @@ module TensorStream
             end
           end
 
-          register_op :argmin, buffer: true do |_context, tensor, inputs|
-            axis = tensor.options[:axis] || 0
-            rank = inputs[0].shape.size
-            raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
+          # register_op :argmin, buffer: true do |_context, tensor, inputs|
+          #   axis = inputs[1].nil? || inputs[1].buffer.nil? || inputs[1].buffer.empty? ? 0 : inputs[1].buffer
+          #   rank = inputs[0].shape.size
+          #   raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
 
-            arr = inputs[0].buffer.reshape(*inputs[0].shape.reverse).to_a
-            op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a < b })
-            convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
-          end
+          #   arr = inputs[0].buffer.reshape(*inputs[0].shape.reverse).to_a
+          #   op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a < b })
+          #   convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
+          # end
 
-          register_op :argmax, buffer: true do |_context, tensor, inputs|
-            axis = tensor.options[:axis] || 0
-            rank = inputs[0].shape.size
-            raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
+          # register_op :argmax, buffer: true do |_context, tensor, inputs|
+          #   axis = inputs[1].nil? || inputs[1].buffer.nil? || inputs[1].buffer.empty? ? 0 : inputs[1].buffer
+          #   rank = inputs[0].shape.size
+          #   raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
 
-            arr = inputs[0].buffer.reshape(*inputs[0].shape.reverse).to_a
-            op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a > b })
-            convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
-          end
+          #   arr = inputs[0].buffer.reshape(*inputs[0].shape.reverse).to_a
+          #   op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a > b })
+          #   convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
+          # end
 
           def reduction(child_context, tensor, value, axis, func)
             if axis.nil?
