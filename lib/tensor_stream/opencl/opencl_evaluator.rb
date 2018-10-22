@@ -853,39 +853,6 @@ module TensorStream
         input_shape
       end
 
-      def reduction(child_context, tensor, a, b, func)
-        input = complete_eval(a, child_context)
-        axis = b.is_a?(Tensor) ? read_final_result(complete_eval(b, child_context)) : b
-        if axis.nil?
-          red = input.buffer.send(func)
-          convert_to_opencl(red, [], data_type: tensor.data_type, name: tensor.name)
-        else
-          return input if input.shape.empty?
-
-          value = input.buffer.reshape(*input.shape.reverse)
-          rank = input.shape.size - 1
-
-          if axis.is_a?(Array)
-            axis.map { |x| rank - x.abs }.sort.reverse_each do |x|
-              value = value.send(func, x.to_i)
-            end
-          else
-            value = value.send(func, rank - axis.abs)
-          end
-
-          new_shape = if value.is_a?(NArray)
-                        value.shape.reverse
-                      else
-                        value = [value]
-                        []
-                      end
-
-          new_shape = _reduced_shape(input.shape.dup, axis) if tensor.options[:keepdims]
-
-          convert_to_opencl(value.flatten, new_shape, data_type: tensor.data_type, name: tensor.name)
-        end
-      end
-
       # selects variants of cl programs depending on input
       def select_program(input_a, input_b, op)
         return [input_a, input_b, op.to_s, 0] if input_a.shape == input_b.shape

@@ -128,6 +128,47 @@ module TensorStream
             op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a > b })
             convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
           end
+
+          def reduction(child_context, tensor, a, b, func)
+            axis = _run(a, child_context)
+            if b.nil? || axis.empty_value?
+              a = _run(a, child_context)
+              cl_n = OpenCL::Int1.new(a.shape.reduce(:*))
+
+              event_wait_list = build_event_wait_list([a, b])
+
+              output_buffer = _create_result_buffer(a.data_type, [], tensor.name)
+              output_buffer.op = _cl_program(func, dtype: a.data_type).send(:"#{func}_#{a.data_type}", _opencl_queue, [1], cl_n, a.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+              output_buffer
+            else
+              axis = b.is_a?(Tensor) ? read_final_result(complete_eval(b, child_context)) : b
+
+              input = complete_eval(a, child_context)
+              return input if input.shape.empty?
+
+              value = input.buffer.reshape(*input.shape.reverse)
+              rank = input.shape.size - 1
+
+              if axis.is_a?(Array)
+                axis.map { |x| rank - x.abs }.sort.reverse_each do |x|
+                  value = value.send(func, x.to_i)
+                end
+              else
+                value = value.send(func, rank - axis.abs)
+              end
+
+              new_shape = if value.is_a?(NArray)
+                            value.shape.reverse
+                          else
+                            value = [value]
+                            []
+                          end
+
+              new_shape = _reduced_shape(input.shape.dup, axis) if tensor.options[:keepdims]
+
+              convert_to_opencl(value.flatten, new_shape, data_type: tensor.data_type, name: tensor.name)
+            end
+          end
         end
       end
     end
