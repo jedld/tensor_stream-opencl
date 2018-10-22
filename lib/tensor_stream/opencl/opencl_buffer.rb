@@ -41,5 +41,9 @@ module TensorStream
       result = buffer.reshape(*shape.map(&:to_i).reverse).to_a
       data_type == :boolean ? process_function_op(result, ->(a, _b) { a != 0 }) : result
     end
+
+    def self.nil_buffer(owner, name, data_type)
+      OpenCLBuffer.new(owner, name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil)
+    end
   end
 end

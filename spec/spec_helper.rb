@@ -1,6 +1,8 @@
 require "bundler/setup"
 require "tensor_stream/opencl"
 require "pry-byebug"
+require 'simplecov'
+SimpleCov.start
 
 Dir["../tensor_stream/spec/support/**/*.rb"].sort.each { |f| require f }
 

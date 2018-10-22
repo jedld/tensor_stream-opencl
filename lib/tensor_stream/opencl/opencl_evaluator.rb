@@ -322,6 +322,7 @@ module TensorStream
 
       def eval_variable(tensor, _child_context)
         raise "variable #{tensor.name} not initalized" if tensor.value.nil? && (tensor.buffer.nil? || !tensor.buffer.dirty)
+
         tensor.buffer = wrap_opencl(tensor, name: tensor.name) if tensor.buffer.nil?
         tensor.buffer
       end
@@ -339,7 +340,7 @@ module TensorStream
         end
       end
 
-      register_op :identity do |context, tensor, inputs|
+      register_op :identity do |_context, tensor, inputs|
         value = inputs[0]
         buffer = OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type, shape: value.shape, buffer: value.buffer, cl_buffer: value.cl_buffer)
         buffer.op = build_event_wait_list(inputs)
@@ -351,25 +352,26 @@ module TensorStream
       end
 
       register_op :assign_add do |context, tensor, inputs|
-        value = execute_2_operand_func('add', tensor, inputs[0], inputs[1], context)
+        value = execute_2_operand_func('add', tensor, inputs[0], inputs[1])
         assign_var(tensor, value, context)
       end
 
       register_op :assign_sub do |context, tensor, inputs|
-        value = execute_2_operand_func('sub', tensor, inputs[0], inputs[1], context)
+        value = execute_2_operand_func('sub', tensor, inputs[0], inputs[1])
         assign_var(tensor, value, context)
       end
 
-      register_op :variable, noop: true do |context, tensor, inputs|
+      register_op :variable, noop: true do |_context, tensor, _inputs|
         variable = tensor.inputs[0]
         raise "variable #{tensor.name} not initalized" if variable.value.nil? && (variable.buffer.nil? || !variable.buffer.dirty)
+
         variable.buffer = wrap_opencl(variable, name: variable.name) if variable.buffer.nil?
         variable.buffer
       end
 
       %i[less less_equal greater greater_equal equal not_equal logical_and].each do |op|
         register_op op do |context, tensor, inputs|
-          execute_2_operand_func(op.to_s, tensor, inputs[0], inputs[1], context, 'cond')
+          execute_2_operand_func(op.to_s, tensor, inputs[0], inputs[1], 'cond')
         end
       end
 
@@ -496,6 +498,7 @@ module TensorStream
         cache_key = "#{tensor.graph.object_id}_opencl_#{tensor.name}:#{object_id}"
         return @context[cache_key] if @context.key?(cache_key)
         return @context[:_cache][cache_key] if tensor.is_const && @context[:_cache][cache_key]
+
         @context[cache_key] = if tensor.value.is_a?(Tensor)
                                 _run(tensor.value, child_context)
                               else
@@ -528,11 +531,12 @@ module TensorStream
         assign.buffer
       end
 
-      def execute_2_operand_func(op_name, tensor, a, b, child_context, prog_name = nil)
+      def execute_2_operand_func(op_name, tensor, a, b, prog_name = nil)
         a, b = auto_type_cast(a, b, name: "#{tensor.name}/cast_#{a.name}_#{b.data_type}")
         dtype = tensor.data_type
         result_shape = TensorShape.infer_shape(a.shape, b.shape)
-        return _create_result_buffer(dtype, [0], "out_#{tensor.name}") if result_shape == [0]
+        return OpenCLBuffer.nil_buffer(self, "out_#{tensor.name}", dtype) if result_shape == [0]
+
         output_buffer = _create_result_buffer(tensor.data_type, result_shape, "out_#{tensor.name}")
         a, b, prog, switch_operands = select_program(a, b, op_name)
         m, n = result_shape
@@ -608,6 +612,7 @@ module TensorStream
 
       def auto_type_cast(a, b, name: nil)
         return [a, b] if a.data_type == b.data_type
+
         m, n = b.shape
         work_group = [m || 1, n || 1]
         event_wait_list = build_event_wait_list([b])
@@ -622,6 +627,7 @@ module TensorStream
 
       def type_cast(source, data_type, name: nil)
         return source if source.data_type == data_type
+
         m, n = source.shape
         work_group = [m || 1, n || 1]
         event_wait_list = [source.op].compact
@@ -671,8 +677,6 @@ module TensorStream
 
                       return nil if buffer.nil?
 
-
-
                       cl_buffer = unless value.flatten.empty?
                                     cl_buffer_size = 1 if cl_buffer_size.zero?
                                     _opencl_context.create_buffer(cl_buffer_size * buffer.element_size)
@@ -702,11 +706,10 @@ module TensorStream
           cl_object.buffer[0] = Tensor.cast_dtype(value, data_type)
         end
 
-        if cl_object.cl_buffer && !value.nil? && (!value.is_a?(Array) || !value.empty?)
-          write_op = _opencl_queue.enqueue_write_buffer(cl_object.cl_buffer, cl_object.buffer)
+        if cl_object.cl_buffer && value && (!value.is_a?(Array) || !value.empty?)
+          cl_object.op = _opencl_queue.enqueue_write_buffer(cl_object.cl_buffer, cl_object.buffer)
         end
 
-        cl_object.op = write_op
         cl_object
       end
 
@@ -716,7 +719,7 @@ module TensorStream
           NArray.sfloat(narray_size)
         when :float64
           NArray.float(narray_size)
-        when :int, :int32, :int64, :uint64, :uint32 #NArray does not have 64 bit int types
+        when :int, :int32, :int64, :uint64, :uint32 # NArray does not have 64 bit int types
           NArray.int(narray_size)
         when :int16, :uint16
           NArray.sint(narray_size)
@@ -734,7 +737,8 @@ module TensorStream
       end
 
       def _create_result_buffer(data_type, shape, name)
-        return OpenCLBuffer.new(self, name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil) if shape == [0]
+        return OpenCLBuffer.nil_buffer(self, name, data_type) if shape == [0]
+
         cache_key = "_result_#{name}_#{shape.join('_')}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           # puts "create result buffer #{cache_key}"
@@ -839,6 +843,7 @@ module TensorStream
 
       def _reduced_shape(input_shape, axes)
         return [] if axes.nil? # reduce to scalar
+
         axes = [axes] unless axes.is_a?(Array)
         return input_shape if axes.empty?
 
