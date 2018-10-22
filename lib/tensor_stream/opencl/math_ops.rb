@@ -94,15 +94,13 @@ module TensorStream
           end
 
           %i[sum mean].each do |op|
-            register_op op, noop: true do |context, tensor, inputs|
+            register_op op do |context, tensor, inputs|
               reduction(context, tensor, inputs[0], inputs[1], op.to_sym)
             end
           end
 
-          register_op :prod, noop: true do |context, tensor, inputs|
-            input_a = complete_eval(inputs[0], context)
-
-            if input_a.buffer.empty?
+          register_op :prod do |context, tensor, inputs|
+            if inputs[0].shape == [0]
               convert_to_opencl([1.0], [], data_type: inputs[0].data_type, name: tensor.name)
             else
               reduction(context, tensor, inputs[0], inputs[1], :prod)
@@ -129,24 +127,26 @@ module TensorStream
             convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
           end
 
-          def reduction(child_context, tensor, a, b, func)
-            axis = _run(a, child_context)
-            if b.nil? || axis.empty_value?
-              a = _run(a, child_context)
-              cl_n = OpenCL::Int1.new(a.shape.reduce(:*))
+          def reduction(child_context, tensor, value, axis, func)
+            if axis.nil?
+              value = _run(value, child_context)
+              size = value.shape.reduce(:*) || 1
+              if value.shape.empty? # for scalars, just return as is
+                value
+              else
+                cl_n = OpenCL::Int1.new(size)
 
-              event_wait_list = build_event_wait_list([a, b])
-
-              output_buffer = _create_result_buffer(a.data_type, [], tensor.name)
-              output_buffer.op = _cl_program(func, dtype: a.data_type).send(:"#{func}_#{a.data_type}", _opencl_queue, [1], cl_n, a.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
-              output_buffer
+                event_wait_list = build_event_wait_list([value])
+                output_buffer = _create_result_buffer(value.data_type, [], tensor.name)
+                output_buffer.op = _cl_program(func, dtype: value.data_type).send(:"#{func}_#{value.data_type}", _opencl_queue, [1], cl_n, value.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+                output_buffer
+              end
             else
-              axis = b.is_a?(Tensor) ? read_final_result(complete_eval(b, child_context)) : b
+              return value if value.shape.empty?
 
-              input = complete_eval(a, child_context)
-              return input if input.shape.empty?
-
-              value = input.buffer.reshape(*input.shape.reverse)
+              axis = axis.is_a?(OpenCLBuffer) ? read_final_result(axis) : axis
+              input = complete_eval(value, child_context)
+              value = value.buffer.reshape(*value.shape.reverse)
               rank = input.shape.size - 1
 
               if axis.is_a?(Array)

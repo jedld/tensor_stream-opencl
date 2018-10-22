@@ -26,7 +26,7 @@ tf.set_random_seed(seed)
 SHAPES = [32, 32]
 
 sess = tf.session(:ruby_evaluator)
-
+large_tensor = tf.constant(sess.run(tf.random_uniform([64,64])))
 a = tf.constant(sess.run(tf.random_uniform(SHAPES)))
 a_int = tf.constant([
   [1, 2, 3, 4, 4, 1, 4, 8, 3, 4, 1, 1],
@@ -61,6 +61,7 @@ out_of_order = tf.matmul(a, b) + tf.matmul(c, d)
 softmax = tf.nn.softmax(a)
 add_n = tf.add_n([a,b,c,d])
 split = tf.split(a, 4)
+sum = tf.reduce_sum(large_tensor)
 
 puts TensorStream::Evaluator.default_evaluators
 
@@ -70,6 +71,8 @@ puts `cat /proc/cpuinfo | grep "model name" | head -1`
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
+  x.report("pure ruby sum            :") { 100.times do sess.run(sum) end }
+  x.report("opencl sum               :") { 100.times do sess2.run(sum) end }
   x.report("pure ruby split          :") { 100.times do sess.run(split) end }
   x.report("opencl split             :") { 100.times do sess2.run(split) end }
   x.report("pure ruby add_n          :") { 100.times do sess.run(add_n) end }
