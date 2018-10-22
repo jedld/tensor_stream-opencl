@@ -70,8 +70,11 @@ is_correct = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
 accuracy =  tf.reduce_mean(tf.cast(is_correct, :float32))
 
 # training step, learning rate = 0.003
-learning_rate = 0.003
-train_step = TensorStream::Train::AdamOptimizer.new(learning_rate).minimize(cross_entropy)
+# step for variable learning rate
+step = tf.placeholder(:int32)
+
+lr = tf.constant(0.0001) + tf.train.exponential_decay(0.003, step, 2000, 1/ Math::E)
+train_step = TensorStream::Train::AdamOptimizer.new(lr).minimize(cross_entropy)
 
 sess = tf.session(profile_enabled: true)
 init = tf.global_variables_initializer
@@ -83,7 +86,7 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels }
 (0..10000).each do |i|
   # load batch of images and correct answers
   batch_x, batch_y = mnist_train.next_batch(100)
-  train_data = { x => batch_x, y_ => batch_y }
+  train_data = { x => batch_x, y_ => batch_y, step => i }
 
   # train
   sess.run(train_step, feed_dict: train_data)
