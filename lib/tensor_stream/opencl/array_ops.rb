@@ -339,7 +339,7 @@ module TensorStream
 
           register_op :index, noop: true do |context, tensor, inputs|
             a = _run(inputs[0], context)
-            index = read_final_result(_run(inputs[1], context))
+            index = inputs[1].value || read_final_result(_run(inputs[1], context))
 
             if a.is_a?(TensorStream::Evaluator::OutputGroup)
               a.outputs[index]
@@ -348,8 +348,7 @@ module TensorStream
             else
               new_shape = a.shape.dup
               new_shape.shift
-              input_a = read_final_result(a)
-              convert_to_opencl(input_a[index], new_shape, data_type: a.data_type, name: tensor.name)
+              _create_result_sub_buffer(a, index, tensor.data_type, new_shape, "#{tensor.name}/out_#{index}")
             end
           end
 

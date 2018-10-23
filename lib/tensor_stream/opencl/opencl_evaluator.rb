@@ -761,7 +761,7 @@ module TensorStream
             region = OpenCL::BufferRegion::new(start, buffer.size * buffer.element_size)
             cl_buffer = parent_buffer.cl_buffer.create_sub_buffer(OpenCL::BUFFER_CREATE_TYPE_REGION, region)
             OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
-          else
+          else # source buffer already a sub buffer, OpenCL does not allow sub buffers from sub buffers
             _create_result_buffer(tensor.data_type, shape, name)
           end
         end
@@ -770,7 +770,7 @@ module TensorStream
 
         if buffer.cl_buffer.associated_memobject
           buffer.op = parent_buffer.op
-        else
+        else # source buffer alreay a sub buffer, so we need to do a copy instead
           region_size_in_bytes = buffer.buffer.size * buffer.buffer.element_size
           start = index * region_size_in_bytes
           region = [region_size_in_bytes, 1, 1]
