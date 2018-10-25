@@ -62,6 +62,8 @@ softmax = tf.nn.softmax(a)
 add_n = tf.add_n([a,b,c,d])
 split = tf.split(a, 4)
 sum = tf.reduce_sum(large_tensor)
+min = tf.min(large_tensor, 1)
+index = large_tensor[0]
 
 puts TensorStream::Evaluator.default_evaluators
 
@@ -71,6 +73,10 @@ puts `cat /proc/cpuinfo | grep "model name" | head -1`
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
+  x.report("pure ruby arr index      :") { 100.times do sess.run(index) end }
+  x.report("opencl arr index         :") { 100.times do sess2.run(index) end }
+  x.report("pure ruby min            :") { 100.times do sess.run(min) end }
+  x.report("opencl min               :") { 100.times do sess2.run(min) end }
   x.report("pure ruby sum            :") { 100.times do sess.run(sum) end }
   x.report("opencl sum               :") { 100.times do sess2.run(sum) end }
   x.report("pure ruby split          :") { 100.times do sess.run(split) end }

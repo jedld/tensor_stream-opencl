@@ -5,7 +5,7 @@
     const int globalRow = get_global_id(0); // Row ID of C (0..M)
     const int globalCol = get_global_id(1); // Col ID of C (0..N)
 
-    C[globalRow * N + globalCol] = A[globalRow * N + globalCol] <= B[globalRow * N + globalCol] ? A[globalRow * N + globalCol] : B[globalRow * N + globalCol];
+    C[globalRow * N + globalCol] = min((<%= c_dtype %>)A[globalRow * N + globalCol],(<%= c_dtype %>) B[globalRow * N + globalCol]);
 }
 
  // 1D + Scalar floating point add op
@@ -14,11 +14,7 @@
     const int globalRow = get_global_id(0); // Row ID of C (0..M)
     const int globalCol = get_global_id(1); // Col ID of C (0..N)
 
-    if (switch_op == 0) {
-      C[globalRow * N + globalCol] = A[globalRow * N + globalCol] <= B[0] ? A[globalRow * N + globalCol] : B[0];
-    } else {
-      C[globalRow * N + globalCol] = B[0] <= A[globalRow * N + globalCol] ? B[0] : A[globalRow * N + globalCol];
-    }
+    C[globalRow * N + globalCol] = min((<%= c_dtype %>)A[globalRow * N + globalCol], (<%= c_dtype %>) B[0]);
 }
 
  // 1D + Scalar floating point add op broadcast
@@ -38,9 +34,5 @@
       b_n_index = b_n_index % N2;
     }
 
-    if (switch_op == 0) {
-      C[globalRow * N + globalCol] = A[globalRow * N + globalCol] <= B[b_m_index * N2 + b_n_index] ? A[globalRow * N + globalCol] : B[b_m_index * N2 + b_n_index];
-    } else {
-      C[globalRow * N + globalCol] = B[b_m_index * N2 + b_n_index] <= A[globalRow * N + globalCol] ? B[b_m_index * N2 + b_n_index] :  A[globalRow * N + globalCol];
-    }
+    C[globalRow * N + globalCol] = min((<%= c_dtype %>)A[globalRow * N + globalCol], (<%= c_dtype %>)B[b_m_index * N2 + b_n_index]);
 }

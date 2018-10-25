@@ -62,7 +62,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(94)
+      expect(described_class.ops.keys.size).to eq(95)
     end
 
     specify do
@@ -128,6 +128,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         rank
         real_div
         reciprocal
+        relu6
         reshape
         round
         shape

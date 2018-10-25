@@ -78,11 +78,8 @@ module TensorStream
             cl_n = OpenCL::Int1.new(n)
             cl_k = OpenCL::Int1.new(k)
 
-            transpose_a = OpenCL::Int1.new(tensor.options[:transpose_a] ? 1 : 0)
-            transpose_b = OpenCL::Int1.new(tensor.options[:transpose_b] ? 1 : 0)
             event_wait_list = build_event_wait_list([a, b])
-
-            output_buffer.op = _cl_program('gemm', dtype: dtype).send(:"gemm_#{dtype}", _opencl_queue, result_shape, cl_m, cl_n, cl_k, transpose_a, transpose_b, a.cl_buffer, b.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.op = _cl_program('gemm', ta: !!tensor.options[:transpose_a], tb: !!tensor.options[:transpose_b], dtype: dtype).send(:"gemm_#{dtype}", _opencl_queue, result_shape, cl_m, cl_n, cl_k, a.cl_buffer, b.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
 
             output_buffer
           end

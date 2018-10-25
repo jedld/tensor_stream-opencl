@@ -121,11 +121,11 @@ module TensorStream
           end
 
           register_op :apply_adagrad do |context, tensor, inputs|
-            target_var, accum, lr, grad = inputs
+            _target_var, _accum, lr, grad = inputs
 
             assign = tensor.inputs[0] || tensor
             assign_acc = tensor.inputs[1]
-            
+
             assign.buffer.dirty = true
             assign_acc.buffer.dirty = true
             output_buffer = assign.buffer
@@ -133,7 +133,7 @@ module TensorStream
             work_group = [output_buffer.total_elements]
 
             event_wait_list = build_event_wait_list(inputs)
-            event = call_program('apply_adagrad', 
+            event = call_program('apply_adagrad',
                                       output_buffer.data_type,
                                       work_group,
                                       lr.cl_buffer,
@@ -195,7 +195,7 @@ module TensorStream
             event_wait_list = build_event_wait_list(inputs)
             work_group = [output_buffer.total_elements]
 
-            event = call_program('apply_rms_prop', output_buffer.data_type, 
+            event = call_program('apply_rms_prop', output_buffer.data_type,
                             work_group,
                             lr.cl_buffer,
                             rho.cl_buffer,
@@ -298,7 +298,7 @@ module TensorStream
             end
 
             b = wrap_opencl(labels, data_type: inputs[0].data_type, name: "#{tensor.name}_label")
- 
+
             event_wait_list = build_event_wait_list(inputs)
             dtype = tensor.data_type
             output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
@@ -334,6 +334,12 @@ module TensorStream
                              grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer.op = event
             output_buffer
+          end
+
+          %i[relu6].each do |op|
+            register_op op, noop: true do |context, tensor, inputs|
+              execute_func(op.to_s, tensor, inputs[0], context)
+            end
           end
         end
       end

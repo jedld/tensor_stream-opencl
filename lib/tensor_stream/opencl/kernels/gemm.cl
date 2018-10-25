@@ -1,8 +1,6 @@
 // First naive implementation
 % c_dtype = dtype_to_c_type(dtype)
 __kernel void gemm_<%= dtype %>(const int M, const int N, const int K,
-                      const int A_transpose,
-                      const int B_transpose,
                       const __global <%= c_dtype %>* A,
                       const __global <%= c_dtype %>* B,
                       __global <%= c_dtype %>* C) {
@@ -16,14 +14,8 @@ __kernel void gemm_<%= dtype %>(const int M, const int N, const int K,
     for (int k=0; k<K; k++) {
         int a_index = globalRow*K + k;
         int b_index = k*N + globalCol;
-
-        if (A_transpose) {
-            a_index = M*k + globalRow;
-        }
-
-        if (B_transpose) {
-            b_index = globalCol*K + k;
-        }
+<% if ta %>a_index = M*k + globalRow;<% end %>
+<% if tb %>b_index = globalCol*K + k;<% end %>
         acc += A[a_index] * B[b_index];
     }
 

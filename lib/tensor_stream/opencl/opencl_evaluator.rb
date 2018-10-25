@@ -230,7 +230,7 @@ module TensorStream
         if device.nil?
           @@global_opencl_context ||= begin
             all_devices = OpenclEvaluator.query_supported_devices.map(&:native_device)
-            puts "global context created for #{all_devices}"
+            # puts "global context created for #{all_devices}"
             OpenCL.create_context(all_devices)
           end
 
@@ -269,7 +269,7 @@ module TensorStream
         @context[:_cache][kernel_cache_key] ||=
           begin
             # puts "building #{kernel_cache_key}"
-            file_path = File.join('/tmp', "#{kernel}.#{suffix}.cl")
+            file_path = File.join(ENV['TS_OPENCL_FILE_CACHE_PATH'] || '/tmp', "#{kernel}.#{suffix}.cl")
             source = if File.exist?(file_path) && ENV['TS_OPENCL_FILE_CACHE']
                        File.read(file_path)
                      else
