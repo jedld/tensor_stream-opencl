@@ -131,13 +131,32 @@ module TensorStream
               if value.shape.empty? # for scalars, just return as is
                 value
               else
-                cl_n = OpenCL::Int1.new(size)
+                reduction_threads = 32
+                items_per_thread_threshold = 4
 
-                event_wait_list = build_event_wait_list([value])
                 output_buffer = _create_result_buffer(value.data_type, [], tensor.name)
-                output_buffer.op = _cl_program(func, dtype: value.data_type).send(:"#{func}_#{value.data_type}", _opencl_queue, [1], cl_n, value.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
-                output_buffer
-              end
+                event_wait_list = build_event_wait_list([value])
+
+                if (size > reduction_threads) && ((size / reduction_threads) > items_per_thread_threshold)
+                  items_per_thread = size / reduction_threads
+                  extra_items = size % reduction_threads
+                  intermediate_output_buffer = _create_result_buffer(value.data_type, [reduction_threads], tensor.name)
+
+                  temp_values = if extra_items.zero?
+                                  _cl_program(func, dtype: value.data_type, index: 0, n: items_per_thread, w: items_per_thread).
+                                    send(:"#{func}_#{value.data_type}", _opencl_queue, [reduction_threads], value.cl_buffer, intermediate_output_buffer.cl_buffer, event_wait_list: event_wait_list)
+                                else
+                                  [_cl_program(func, dtype: value.data_type, index: 0, n: items_per_thread, w: items_per_thread).
+                                    send(:"#{func}_#{value.data_type}", _opencl_queue, [reduction_threads - 1], value.cl_buffer, intermediate_output_buffer.cl_buffer, event_wait_list: event_wait_list),
+                                  _cl_program(func, dtype: value.data_type, index: reduction_threads - 1, n: items_per_thread + extra_items,  w: items_per_thread).send(:"#{func}_#{value.data_type}", _opencl_queue, [1], value.cl_buffer, intermediate_output_buffer.cl_buffer, event_wait_list: event_wait_list)]
+                                end
+                  output_buffer.op = _cl_program(func, dtype: value.data_type, n: reduction_threads, index: 0, w: 0).send(:"#{func}_#{value.data_type}", _opencl_queue, [1], value.cl_buffer, output_buffer.cl_buffer, event_wait_list: temp_values)
+                  output_buffer
+                else
+                  output_buffer.op = _cl_program(func, dtype: value.data_type, n: size, index: 0, w: 0).send(:"#{func}_#{value.data_type}", _opencl_queue, [1], value.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+                  output_buffer
+                end
+               end
             else
               return value if value.shape.empty?
 

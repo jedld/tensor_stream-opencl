@@ -26,7 +26,7 @@ tf.set_random_seed(seed)
 SHAPES = [32, 32]
 
 sess = tf.session(:ruby_evaluator)
-large_tensor = tf.constant(sess.run(tf.random_uniform([64,64])))
+large_tensor = tf.constant(sess.run(tf.random_uniform([256, 256])))
 a = tf.constant(sess.run(tf.random_uniform(SHAPES)))
 a_int = tf.constant([
   [1, 2, 3, 4, 4, 1, 4, 8, 3, 4, 1, 1],
@@ -62,6 +62,7 @@ softmax = tf.nn.softmax(a)
 add_n = tf.add_n([a,b,c,d])
 split = tf.split(a, 4)
 sum = tf.reduce_sum(large_tensor)
+sum_axis_1 = tf.reduce_sum(large_tensor, 1)
 min = tf.min(large_tensor, 1)
 index = large_tensor[0]
 
@@ -79,6 +80,8 @@ Benchmark.bmbm do |x|
   x.report("opencl min               :") { 100.times do sess2.run(min) end }
   x.report("pure ruby sum            :") { 100.times do sess.run(sum) end }
   x.report("opencl sum               :") { 100.times do sess2.run(sum) end }
+  x.report("pure ruby sum axis 1     :") { 100.times do sess.run(sum_axis_1) end }
+  x.report("opencl sum axis 1        :") { 100.times do sess2.run(sum_axis_1) end }
   x.report("pure ruby split          :") { 100.times do sess.run(split) end }
   x.report("opencl split             :") { 100.times do sess2.run(split) end }
   x.report("pure ruby add_n          :") { 100.times do sess.run(add_n) end }

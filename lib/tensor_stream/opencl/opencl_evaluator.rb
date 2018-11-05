@@ -53,12 +53,20 @@ module TensorStream
         super
         _create_opencl_context
         @opencl_device = device.native_device
+
+        @max_work_item_dimensions = @opencl_device.max_work_item_dimensions
+        @max_work_item_sizes = @opencl_device.max_work_item_sizes
+        @max_work_group_size = @opencl_device.max_work_group_size
+
+        @local_mem_size = @opencl_device.local_mem_size
+        @device_type = @opencl_device.type.to_s.downcase
+
         create_command_queue
       end
 
       def self.query_supported_devices
         devices = query_devices_with_score
-        devices.sort { |a, b| a[1] <=> b[1] }.map do |d|
+        devices.sort_by { |a| a[1] }.map do |d|
           opencl_to_device(d)
         end
       end
@@ -273,7 +281,8 @@ module TensorStream
             source = if File.exist?(file_path) && ENV['TS_OPENCL_FILE_CACHE']
                        File.read(file_path)
                      else
-                       filename = %w[cl.erb cl].map { |ext| cl_template_path(kernel, ext) }.find { |n| File.exist?(n) }
+                       filenames = ['', ".#{@device_type}"].map { |type| %w[cl.erb cl].map { |ext| cl_template_path("#{kernel}#{type}", ext) } }.flatten
+                       filename = filenames.find { |n| File.exist?(n) }
                        raise "opencl kernel template for #{kernel} has not yet been defined" if filename.nil?
 
                        source = File.read(filename)

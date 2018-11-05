@@ -22,6 +22,12 @@ mnist = Mnist.read_data_sets('/tmp/data', one_hot: true)
 puts "downloading finished"
 
 x = tf.placeholder(:float32, shape: [nil, 784])
+y_ = tf.placeholder(:float32, shape: [nil, 10])
+
+# Probability of keeping a node during dropout = 1.0 at test time (no dropout) and 0.75 at training time
+pkeep = tf.placeholder(tf.float32)
+# step for variable learning rate
+step = tf.placeholder(:int32)
 
 K = 200
 L = 100
@@ -47,19 +53,21 @@ b5 = tf.variable(tf.zeros([10]))
 x_ = tf.reshape(x, [-1, 784])
 
 y1 = tf.nn.relu(tf.matmul(x_, w1) + b1)
-y2 = tf.nn.relu(tf.matmul(y1, w2) + b2)
-y3 = tf.nn.relu(tf.matmul(y2, w3) + b3)
-y4 = tf.nn.relu(tf.matmul(y3, w4) + b4)
-ylogits = tf.matmul(y4, w5) + b5
+y1d = tf.nn.dropout(y1, pkeep)
+
+y2 = tf.nn.relu(tf.matmul(y1d, w2) + b2)
+y2d = tf.nn.dropout(y2, pkeep)
+
+y3 = tf.nn.relu(tf.matmul(y2d, w3) + b3)
+y3d = tf.nn.dropout(y3, pkeep)
+
+y4 = tf.nn.relu(tf.matmul(y3d, w4) + b4)
+y4d = tf.nn.dropout(y4, pkeep)
+
+ylogits = tf.matmul(y4d, w5) + b5
 
 # model
 y = tf.nn.softmax(ylogits)
-
-y_ = tf.placeholder(:float32, shape: [nil, 10])
-
-# training step, learning rate = 0.003
-# step for variable learning rate
-step = tf.placeholder(:int32)
 
 # cross-entropy loss function (= -sum(Y_i * log(Yi)) ), normalised for batches of 100  images
 # TensorFlow provides the softmax_cross_entropy_with_logits function to avoid numerical stability
@@ -81,12 +89,12 @@ init = tf.global_variables_initializer
 
 sess.run(init)
 mnist_train = mnist.train
-test_data = { x => mnist.test.images, y_ => mnist.test.labels }
+test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
 
 (0..1000).each do |i|
   # load batch of images and correct answers
   batch_x, batch_y = mnist_train.next_batch(100)
-  train_data = { x => batch_x, y_ => batch_y, step => i }
+  train_data = { x => batch_x, y_ => batch_y, step => i, pkeep => 0.75 }
 
   # train
   sess.run(train_step, feed_dict: train_data)
