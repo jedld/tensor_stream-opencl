@@ -197,6 +197,7 @@ module TensorStream
             ops = if axis.zero? # fast path
               inputs.each_with_index.map do |input, index|
                 next if input.empty_value?
+
                 start = index * input.buffer.size * input.buffer.element_size
                 region = [input.buffer.size * input.buffer.element_size, 1, 1]
                 event_wait_list = build_event_wait_list(input)

@@ -35,7 +35,8 @@ module TensorStream
     end
 
     ##
-    # PURE ruby evaluator used for testing and development
+    # OpenCL hardware accelerated evaluator
+    #
     class OpenclEvaluator < BaseEvaluator
       attr_accessor :retain
       attr_reader :opencl_device, :opencl_context
@@ -64,38 +65,46 @@ module TensorStream
         create_command_queue
       end
 
-      def self.query_supported_devices
-        devices = query_devices_with_score
-        devices.sort_by { |a| a[1] }.map do |d|
-          opencl_to_device(d)
+      class << self
+        def query_supported_devices
+          devices = query_devices_with_score
+          devices.sort_by { |a| a[1] }.map do |d|
+            opencl_to_device(d)
+          end
         end
-      end
 
-      def self.fetch_device(query = [])
-        devices = query_devices_with_score
-        platform_devices = devices.select { |d| d[0].platform.to_s.tr(' ', '_').downcase =~ /#{query[0].downcase}/ }
-        opencl_to_device(platform_devices[[query[1].to_i, platform_devices.size - 1].min])
-      end
-
-      def self.opencl_to_device(dev)
-        device = dev[0]
-        index = dev[3]
-        platform_name = device.platform.name.tr(' ', '_').downcase
-        uri = [platform_name, index].join(':')
-
-        device_type = device.type.to_s == 'GPU' ? :gpu : :cpu
-
-        OpenclDevice.new(uri, device_type, self).tap do |d|
-          d.native_device = device
+        def fetch_device(query = [])
+          devices = query_devices_with_score
+          platform_devices = devices.select { |d| d[0].platform.to_s.tr(' ', '_').downcase =~ /#{query[0].downcase}/ }
+          opencl_to_device(platform_devices[[query[1].to_i, platform_devices.size - 1].min])
         end
-      end
 
-      ##
-      # Select the best device available in the system for this evaluator
-      def self.default_device
-        devices = OpenclEvaluator.query_devices_with_score
-        device = devices.max { |a, b| a[1] <=> b[1] }
-        opencl_to_device(device)
+        def opencl_to_device(dev)
+          device = dev[0]
+          index = dev[3]
+          platform_name = device.platform.name.tr(' ', '_').downcase
+          uri = [platform_name, index].join(':')
+
+          device_type = device.type.to_s == 'GPU' ? :gpu : :cpu
+
+          OpenclDevice.new(uri, device_type, self).tap do |d|
+            d.native_device = device
+          end
+        end
+
+        ##
+        # Select the best device available in the system for this evaluator
+        def default_device
+          devices = OpenclEvaluator.query_devices_with_score
+          device = devices.max { |a, b| a[1] <=> b[1] }
+          opencl_to_device(device)
+        end
+
+        def getset_global_opencl_context(platform)
+          @global_opencl_context ||= {}
+          @global_opencl_context[platform] ||= yield
+          @global_opencl_context[platform]
+        end
       end
 
       # opencl evaluator main entrypoint
@@ -236,16 +245,22 @@ module TensorStream
 
       def _create_opencl_context(device = nil)
         if device.nil?
-          @@global_opencl_context ||= begin
-            all_devices = OpenclEvaluator.query_supported_devices.map(&:native_device)
-            # puts "global context created for #{all_devices}"
-            OpenCL.create_context(all_devices)
+          all_devices_by_platform = {}
+          TensorStream::Evaluator::OpenclEvaluator.query_supported_devices.map(&:native_device).each do |d|
+            all_devices_by_platform[d.platform.name] ||= []
+            all_devices_by_platform[d.platform.name] << d
           end
 
-          @opencl_context = @@global_opencl_context
+          all_devices_by_platform.each do |platform, devices|
+            @opencl_context = TensorStream::Evaluator::OpenclEvaluator.getset_global_opencl_context(platform) do
+              OpenCL.create_context(devices)
+            end
+          end
         else
           puts "context created for #{device.native_device}"
-          @opencl_context = OpenCL.create_context(device.native_device)
+          @opencl_context = TensorStream::Evaluator::OpenclEvaluator.getset_global_opencl_context(device.native_device.platform) do
+            OpenCL.create_context(device.native_device)
+          end
         end
       end
 
@@ -524,7 +539,6 @@ module TensorStream
         buffer = complete_eval(b, child_context)
 
         if assign.buffer
-          # buffer = type_cast(buffer, assign.data_type, name: "#{tensor.name}/cast_#{tensor.name}_#{tensor.data_type}")
           event_wait_list = build_event_wait_list([buffer, assign.buffer])
           assign.buffer.op = if assign.buffer.cl_buffer != buffer.cl_buffer
                                _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.buffer.cl_buffer, event_wait_list: event_wait_list)
@@ -536,6 +550,7 @@ module TensorStream
           assign.buffer = convert_to_opencl(value, buffer.shape, data_type: tensor.data_type, name: assign.name)
           assign.value = value
         end
+
         assign.buffer.dirty = true
         assign.buffer
       end
@@ -693,6 +708,7 @@ module TensorStream
 
                       @context[:_cache][cache_key] = OpenCLBuffer.new(self, name: name, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer)
                     end
+
         if data_type == :string
           value[0].each_byte.with_index do |c, index|
             cl_object.buffer[index] = c
@@ -715,6 +731,7 @@ module TensorStream
           cl_object.buffer[0] = Tensor.cast_dtype(value, data_type)
         end
 
+        # if OpenCL buffer is valid enqueue a write
         if cl_object.cl_buffer && value && (!value.is_a?(Array) || !value.empty?)
           cl_object.op = _opencl_queue.enqueue_write_buffer(cl_object.cl_buffer, cl_object.buffer)
         end
