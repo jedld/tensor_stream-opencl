@@ -489,11 +489,11 @@ module TensorStream
       rescue EvaluatorExcecutionException => e
         _opencl_queue.finish # dump queue
         puts e.message
-        raise e, "error #{e.message} while evaluating #{tensor.name} : #{tensor.to_math(true, 1)} defined at #{tensor.source}"
+        raise e, "error #{e.message} while evaluating #{tensor.name} : defined at #{tensor.source}"
       rescue TensorStreamError => e
         _opencl_queue.finish # dump queue
         puts e.message
-        raise e, "error #{e.message} while evaluating #{tensor.name} : #{tensor.to_math(true, 1)} defined at #{tensor.source}"
+        raise e, "error #{e.message} while evaluating #{tensor.name} : defined at #{tensor.source}"
       rescue StandardError => e
         _opencl_queue.finish # dump queue
         puts e.message
@@ -564,9 +564,18 @@ module TensorStream
         output_buffer = _create_result_buffer(tensor.data_type, result_shape, "out_#{tensor.name}")
         a, b, prog, switch_operands = select_program(a, b, op_name)
         m, n = result_shape
-        work_group = [m || 1, n || 1]
-        cl_m = OpenCL::Int1.new(m || 1)
-        cl_n = OpenCL::Int1.new(n || 1)
+
+        work_group = if result_shape.size > 2 && (b.shape.size.zero? || (a.shape == b.shape))
+                       [m, result_shape.reduce(:*) / m]
+                     elsif result_shape.size <= 2
+                       [m || 1, n || 1]
+                     else
+                       raise "rank > 2 not supported for now"
+                     end
+
+        cl_m = OpenCL::Int1.new(work_group[0])
+        cl_n = OpenCL::Int1.new(work_group[1])
+
         cl_switch = OpenCL::Int1.new(switch_operands) # no need to switch for addition
 
         event_wait_list = build_event_wait_list([a, b]) # add dependency wait list

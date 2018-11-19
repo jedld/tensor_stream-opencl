@@ -372,12 +372,13 @@ module TensorStream
           register_op :conv2d_backprop_input do |context, tensor, inputs|
             image_shape, filter, grad = inputs
             filter_shape = filter.shape
-            
+
             strides = tensor.options[:strides]
             height_stride = strides[1]
             width_stride = strides[2]
 
             image_shape = read_final_result(complete_eval(image_shape, context))
+
             event_wait_list = build_event_wait_list(inputs)
             output_buffer = _create_result_buffer(tensor.data_type, image_shape, tensor.name)
 
@@ -388,7 +389,7 @@ module TensorStream
 
             cl_image_height = OpenCL::Int1.new(height)
             cl_image_width = OpenCL::Int1.new(width)
-            
+
             output_buffer.op = _cl_program("conv2d_backprop_input", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: out_channels, stride: [height_stride, width_stride] ).send(:conv2d_backprop_input, _opencl_queue, work_dimen, cl_image_height, cl_image_width,
               filter.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer
@@ -398,7 +399,7 @@ module TensorStream
             images, filter_shape, grad = inputs
 
             event_wait_list = build_event_wait_list(inputs)
-            
+
             strides = tensor.options[:strides]
             height_stride = strides[1]
             width_stride = strides[2]

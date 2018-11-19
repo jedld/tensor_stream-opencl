@@ -68,7 +68,9 @@ sum = tf.reduce_sum(large_tensor)
 sum_axis_1 = tf.reduce_sum(large_tensor, 1)
 min = tf.min(large_tensor, 1)
 index = large_tensor[0]
+
 conv2d = tf.nn.conv2d(sample_image, sample_filter, [1, 1, 1, 1], 'SAME')
+conv2d_grad = tf.gradients(conv2d, [sample_image, sample_filter])
 
 puts TensorStream::Evaluator.default_evaluators
 
@@ -78,6 +80,8 @@ puts `cat /proc/cpuinfo | grep "model name" | head -1`
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
+  x.report("pure ruby conv2d_backprop      :") { 100.times do sess.run(conv2d_grad) end }
+  x.report("opencl conv2d_backprop         :") { 100.times do sess2.run(conv2d_grad) end }
   x.report("pure ruby conv2d      :") { 100.times do sess.run(conv2d) end }
   x.report("opencl conv2d         :") { 100.times do sess2.run(conv2d) end }
   x.report("pure ruby arr index      :") { 100.times do sess.run(index) end }
