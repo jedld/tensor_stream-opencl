@@ -341,6 +341,38 @@ module TensorStream
               execute_func(op.to_s, tensor, inputs[0], context)
             end
           end
+
+          register_op :conv2d do |_context, tensor, inputs|
+            filter = inputs[1]
+            batch, height, width, channel = inputs[0].shape
+            filter_shape = filter.shape
+            strides = tensor.options[:strides]
+            height_stride = strides[1]
+            width_stride = strides[2]
+
+            raise TensorStream::ValueError, " Current implementation does not yet support strides in the batch and depth dimensions." if strides[0] != 1 || strides[3] != 1
+
+            event_wait_list = build_event_wait_list(inputs)
+
+            f_height, f_width, in_channels, out_channels = filter_shape
+            out_shape = [batch, height / height_stride, width / width_stride, out_channels]
+            output_buffer = _create_result_buffer(tensor.data_type, out_shape, tensor.name)
+
+            cl_image_height = OpenCL::Int1.new(height)
+            cl_image_width = OpenCL::Int1.new(width)
+
+            work_dimen = [batch, height / height_stride, width / width_stride]
+
+            output_buffer.op = _cl_program("conv2d", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channel, out_ch: out_channels, stride: [height_stride, width_stride] ).send(:conv2d, _opencl_queue, work_dimen, cl_image_height, cl_image_width, inputs[0].cl_buffer,
+              inputs[1].cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer
+          end
+
+          register_op :conv2d_backprop_input do |_context, tensor, inputs|
+          end
+
+          register_op :conv2d_backprop_filter do |_context, tensor, inputs|
+          end
         end
       end
     end
