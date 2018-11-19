@@ -342,6 +342,7 @@ module TensorStream
             end
           end
 
+          # Fast per pixel parallel convolution operation
           register_op :conv2d do |_context, tensor, inputs|
             filter = inputs[1]
             batch, height, width, channel = inputs[0].shape
@@ -368,10 +369,54 @@ module TensorStream
             output_buffer
           end
 
-          register_op :conv2d_backprop_input do |_context, tensor, inputs|
+          register_op :conv2d_backprop_input do |context, tensor, inputs|
+            image_shape, filter, grad = inputs
+            filter_shape = filter.shape
+            
+            strides = tensor.options[:strides]
+            height_stride = strides[1]
+            width_stride = strides[2]
+
+            image_shape = read_final_result(complete_eval(image_shape, context))
+            event_wait_list = build_event_wait_list(inputs)
+            output_buffer = _create_result_buffer(tensor.data_type, image_shape, tensor.name)
+
+            batch, height, width, channels = image_shape
+            f_height, f_width, in_channels, out_channels = filter_shape
+
+            work_dimen = [batch, height, width]
+
+            cl_image_height = OpenCL::Int1.new(height)
+            cl_image_width = OpenCL::Int1.new(width)
+            
+            output_buffer.op = _cl_program("conv2d_backprop_input", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: out_channels, stride: [height_stride, width_stride] ).send(:conv2d_backprop_input, _opencl_queue, work_dimen, cl_image_height, cl_image_width,
+              filter.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer
           end
 
-          register_op :conv2d_backprop_filter do |_context, tensor, inputs|
+          register_op :conv2d_backprop_filter do |context, tensor, inputs|
+            images, filter_shape, grad = inputs
+
+            event_wait_list = build_event_wait_list(inputs)
+            
+            strides = tensor.options[:strides]
+            height_stride = strides[1]
+            width_stride = strides[2]
+
+            filter_shape = read_final_result(complete_eval(filter_shape, context))
+            output_buffer = _create_result_buffer(tensor.data_type, filter_shape, tensor.name)
+
+            batch_size, height, width, channels = images.shape
+            f_height, f_width, input_channels, output_channels = filter_shape
+            work_dimen = [f_height, f_width, output_channels]
+
+            cl_batch_size = OpenCL::Int1.new(batch_size)
+            cl_image_height = OpenCL::Int1.new(height)
+            cl_image_width = OpenCL::Int1.new(width)
+
+            output_buffer.op = _cl_program("conv2d_backprop_filter", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: output_channels, stride: [height_stride, width_stride] ).send(:conv2d_backprop_filter, _opencl_queue, work_dimen, cl_batch_size, cl_image_height, cl_image_width,
+              images.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer
           end
         end
       end
