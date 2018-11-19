@@ -15,7 +15,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   describe "supported TensorStream version" do
     it "returns the version" do
-      expect(TensorStream.version).to eq("0.9.5")
+      expect(TensorStream.version).to eq("0.9.6")
     end
   end
 
@@ -63,7 +63,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(95)
+      expect(described_class.ops.keys.size).to eq(98)
     end
 
     specify do
@@ -90,6 +90,9 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         check_numerics
         concat
         cond
+        conv2d
+        conv2d_backprop_filter
+        conv2d_backprop_input
         cos
         decode_png
         div
