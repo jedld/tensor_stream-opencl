@@ -29,19 +29,19 @@ M = 60
 N = 30
 
 
-w1 = tf.variable(tf.random_normal([784, K]))
+w1 = tf.variable(tf.truncated_normal([784, K], stddev: 0.1))
 b1 = tf.variable(tf.ones([K])/10)
 
-w2 = tf.variable(tf.random_normal([K, L]))
+w2 = tf.variable(tf.truncated_normal([K, L], stddev: 0.1))
 b2 = tf.variable(tf.ones([L])/10)
 
-w3 = tf.variable(tf.random_normal([L, M]))
+w3 = tf.variable(tf.truncated_normal([L, M], stddev: 0.1))
 b3 = tf.variable(tf.ones([M])/10)
 
-w4 = tf.variable(tf.random_normal([M, N]))
+w4 = tf.variable(tf.truncated_normal([M, N], stddev: 0.1))
 b4 = tf.variable(tf.ones([N])/10)
 
-w5 = tf.variable(tf.random_normal([N, 10]))
+w5 = tf.variable(tf.truncated_normal([N, 10], stddev: 0.1))
 b5 = tf.variable(tf.zeros([10]))
 
 x_ = tf.reshape(x, [-1, 784])

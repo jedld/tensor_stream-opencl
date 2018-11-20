@@ -54,33 +54,32 @@ M = 12 # third convolutional layer
 N = 200 # fully connected layer
 
 
-w1 = tf.variable(tf.random_normal([5, 5, 1, K]))
+w1 = tf.variable(tf.truncated_normal([5, 5, 1, K], stddev: 0.1))
 b1 = tf.variable(tf.ones([K])/10)
 
-w2 = tf.variable(tf.random_normal([5, 5, K, L]))
+w2 = tf.variable(tf.truncated_normal([5, 5, K, L], stddev: 0.1))
 b2 = tf.variable(tf.ones([L])/10)
 
-w3 = tf.variable(tf.random_normal([4, 4, L, M]))
+w3 = tf.variable(tf.truncated_normal([4, 4, L, M], stddev: 0.1))
 b3 = tf.variable(tf.ones([M])/10)
 
-w4 = tf.variable(tf.random_normal([7 * 7 * M, N]))
+w4 = tf.variable(tf.truncated_normal([7 * 7 * M, N], stddev: 0.1))
 b4 = tf.variable(tf.ones([N])/10)
 
-w5 = tf.variable(tf.random_normal([N, 10]))
+w5 = tf.variable(tf.truncated_normal([N, 10], stddev: 0.1))
 b5 = tf.variable(tf.ones([10])/10)
-
 
 # The model
 stride = 1  # output is 28x28
-y1 = tf.sigmoid(tf.nn.conv2d(tf.reshape(x, [-1, 28, 28, 1]), w1, [1, stride, stride, 1], 'SAME') + b1)
+y1 = tf.nn.relu(tf.nn.conv2d(tf.reshape(x, [-1, 28, 28, 1]), w1, [1, stride, stride, 1], 'SAME') + b1)
 stride = 2  # output is 14x14
-y2 = tf.sigmoid(tf.nn.conv2d(y1, w2, [1, stride, stride, 1], 'SAME') + b2)
+y2 = tf.nn.relu(tf.nn.conv2d(y1, w2, [1, stride, stride, 1], 'SAME') + b2)
 stride = 2  # output is 7x7
-y3 = tf.sigmoid(tf.nn.conv2d(y2, w3, [1, stride, stride, 1], 'SAME') + b3)
+y3 = tf.nn.relu(tf.nn.conv2d(y2, w3, [1, stride, stride, 1], 'SAME') + b3)
 
 # reshape the output from the third convolution for the fully connected layer
 yy = tf.reshape(y3, [-1, 7 * 7 * M])
-y4 = tf.sigmoid(tf.matmul(yy, w4) + b4)
+y4 = tf.nn.relu(tf.matmul(yy, w4) + b4)
 ylogits = tf.matmul(y4, w5) + b5
 
 # model
@@ -122,6 +121,7 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels }
   sess.run(train_step, feed_dict: train_data)
 
   if (i % 50 == 0)
+    # File.write("profile.json", TensorStream::ReportTool.profile_for(sess).to_json)
     # success? add code to print it
     a_train, c_train = sess.run([accuracy, cross_entropy], feed_dict: train_data)
 

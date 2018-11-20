@@ -112,6 +112,7 @@ module TensorStream
         result = complete_eval(tensor, execution_context)
         # puts "-------------------wait finish------------------------"
         _opencl_queue.finish
+        # puts "-------------------done finish------------------------"
         read_final_result(result)
       end
 
@@ -170,6 +171,7 @@ module TensorStream
         events = build_event_wait_list([buffer])
         # puts "** wait #{tensor.name} **"
         OpenCL.wait_for_events(events) unless events.empty?
+        # puts "** done #{tensor.name} **"
         buffer
       end
 
@@ -449,6 +451,7 @@ module TensorStream
         events = build_event_wait_list(inputs)
         # puts "** wait for event flow_group**"
         OpenCL.wait_for_events(events) unless events.empty?
+        # puts "** done for event flow_group**"
         nil
       end
 
@@ -461,9 +464,7 @@ module TensorStream
         return @context[:_cache][cache_key] if @context[:_cache].key?(cache_key)
         return @context[cache_key] if @context.key?(cache_key)
 
-        # puts "opencl eval #{object_id} #{tensor.name}"
         invoke(tensor, child_context).tap do |result|
-          # puts "result done opencl #{object_id}: #{tensor.name}"
           if tensor.breakpoint
             a = resolve_placeholder(tensor.inputs[0], child_context) if tensor.inputs && tensor.inputs[0]
             b = resolve_placeholder(tensor.inputs[1], child_context) if tensor.inputs && tensor.inputs[1]
@@ -617,10 +618,15 @@ module TensorStream
         output_buffer = _create_result_buffer(tensor.data_type, p.shape, tensor.name)
 
         m, n = p.shape
-        raise "unsupported rank" if p.shape.size > 2
-        work_group = [m || 1, n || 1]
-        cl_m = OpenCL::Int1.new(m || 1)
-        cl_n = OpenCL::Int1.new(n || 1)
+
+        work_group = if p.shape.size > 2
+                       [m, p.shape.reduce(:*) / m]
+                     else
+                       [ m || 1, n || 1]
+                     end
+
+        cl_m = OpenCL::Int1.new(work_group[0])
+        cl_n = OpenCL::Int1.new(work_group[1])
 
         event_wait_list = build_event_wait_list([a, b, p]) # add dependency wait list
         output_buffer.op = _cl_program(op_name.to_s, dtype: dtype).
