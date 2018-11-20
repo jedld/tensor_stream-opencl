@@ -569,6 +569,9 @@ module TensorStream
                        [m, result_shape.reduce(:*) / m]
                      elsif result_shape.size <= 2
                        [m || 1, n || 1]
+                     elsif (b.shape.size == 1) && (result_shape.last == b.shape.last)
+                      last_dim = b.shape.last
+                      [result_shape.reduce(:*) / last_dim, last_dim] 
                      else
                        raise "rank > 2 not supported for now"
                      end
@@ -614,6 +617,7 @@ module TensorStream
         output_buffer = _create_result_buffer(tensor.data_type, p.shape, tensor.name)
 
         m, n = p.shape
+        raise "unsupported rank" if p.shape.size > 2
         work_group = [m || 1, n || 1]
         cl_m = OpenCL::Int1.new(m || 1)
         cl_n = OpenCL::Int1.new(n || 1)

@@ -220,6 +220,9 @@ module TensorStream
             output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
 
             m, n = a.shape
+
+            raise "unsupported rank " if a.shape.size > 2
+            
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
@@ -236,6 +239,9 @@ module TensorStream
             output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
 
             m, n = a.shape
+
+            raise "unsupported rank " if a.shape.size > 2
+
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
@@ -254,6 +260,9 @@ module TensorStream
             output_buffer_backprop = _create_result_buffer(tensor.data_type, a.shape, "#{tensor.name}_2")
             rank = a.shape.size - 1
             m, n = a.shape
+
+            raise "unsupported rank " if a.shape.size > 2
+
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
@@ -276,6 +285,9 @@ module TensorStream
             output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
 
             m, n = a.shape
+
+            raise "unsupported rank " if a.shape.size > 2
+
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
@@ -305,6 +317,9 @@ module TensorStream
             output_buffer_backprop = _create_result_buffer(tensor.data_type, a.shape, "#{tensor.name}_2")
             rank = a.shape.size - 1
             m, n = a.shape
+
+            raise "unsupported rank " if a.shape.size > 2
+
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
@@ -326,6 +341,7 @@ module TensorStream
             output_buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
 
             m, n = a.shape
+            raise "unsupported rank " if a.shape.size > 2
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)

@@ -14,10 +14,15 @@ module TensorStream
             if inputs.size == 1
               inputs[0]
             else
-              m, n = inputs[0].shape
-              work_group = [m || 1, n || 1]
-              cl_m = OpenCL::Int1.new(m || 1)
-              cl_n = OpenCL::Int1.new(n || 1)
+              work_group = if inputs[0].shape.size > 2
+                             [ inputs[0].shape.reduce(:*) / inputs[0].shape.last, inputs[0].shape.last]
+                           else
+                             m, n = inputs[0].shape
+                             [m || 1, n || 1]
+                           end
+              
+              cl_m = OpenCL::Int1.new(work_group[0])
+              cl_n = OpenCL::Int1.new(work_group[1])
               cl_switch = OpenCL::Int1.new(0)
               dtype = tensor.data_type
 
@@ -68,6 +73,7 @@ module TensorStream
 
             raise "#{tensor.inputs[0].name} rank must be greater than 1" if a.shape.size < 2
             raise "#{tensor.inputs[1].name} rank must be greater than 1" if b.shape.size < 2
+            raise "#{tensor.inputs[0].name} unsupported rank" if b.shape.size != 2 || a.shape.size!=2
             raise "incompatible shape sizes for matrix multiplication (#{a.shape[1]} != #{b.shape[0]}) #{a.shape} vs #{b.shape}" if k != v
 
             dtype = tensor.data_type

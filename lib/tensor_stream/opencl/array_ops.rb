@@ -422,10 +422,16 @@ module TensorStream
             a = inputs[0]
             if a.data_type != tensor.data_type
               buffer = _create_result_buffer(tensor.data_type, a.shape, tensor.name)
-              m, n = a.shape
-              cl_m = OpenCL::Int1.new(m || 1)
-              cl_n = OpenCL::Int1.new(n || 1)
-              work_group = [m || 1, n || 1]
+              work_group = if inputs[0].shape.size > 2
+                              [ inputs[0].shape.reduce(:*) / inputs[0].shape.last, inputs[0].shape.last]
+                            else
+                              m, n = inputs[0].shape
+                              [m || 1, n || 1]
+                            end
+
+              cl_m = OpenCL::Int1.new(work_group[0])
+              cl_n = OpenCL::Int1.new(work_group[1])
+
               event_wait_list = build_event_wait_list(inputs)
               buffer.op = _cl_program("cast", source_dt: a.data_type, target_dt: tensor.data_type).cast(_opencl_queue, work_group, cl_m, cl_n, a.cl_buffer, buffer.cl_buffer, event_wait_list: event_wait_list)
               buffer
