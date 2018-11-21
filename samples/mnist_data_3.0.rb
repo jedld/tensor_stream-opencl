@@ -38,12 +38,15 @@ puts "downloading finished"
 
 
 # input X: 28x28 grayscale images, the first dimension (None) will index the images in the mini-batch
-
 x = tf.placeholder(:float32, shape: [nil, 28, 28, 1])
+
 # correct answers will go here
 y_ = tf.placeholder(:float32, shape: [nil, 10])
+
 # step for variable learning rate
 step = tf.placeholder(:int32)
+
+pkeep = tf.placeholder(tf.float32)
 
 # three convolutional layers with their channel counts, and a
 # fully connected layer (tha last layer has 10 softmax neurons)
@@ -80,7 +83,11 @@ y3 = tf.nn.relu(tf.nn.conv2d(y2, w3, [1, stride, stride, 1], 'SAME') + b3)
 # reshape the output from the third convolution for the fully connected layer
 yy = tf.reshape(y3, [-1, 7 * 7 * M])
 y4 = tf.nn.relu(tf.matmul(yy, w4) + b4)
-ylogits = tf.matmul(y4, w5) + b5
+
+# dropout to prevent overfitting
+yy4 = tf.nn.dropout(y4, pkeep)
+
+ylogits = tf.matmul(yy4, w5) + b5
 
 # model
 y = tf.nn.softmax(ylogits)
@@ -105,29 +112,34 @@ train_step = TensorStream::Train::AdamOptimizer.new(lr).minimize(cross_entropy)
 
 sess = tf.session
 # Add ops to save and restore all the variables.
-saver = tf::Train::Saver.new
+
 init = tf.global_variables_initializer
 
 sess.run(init)
 mnist_train = mnist.train
-test_data = { x => mnist.test.images, y_ => mnist.test.labels }
+test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
 
-(0..1000).each do |i|
+binding.pry
+
+(0..10001).each do |i|
   # load batch of images and correct answers
   batch_x, batch_y = mnist_train.next_batch(100)
-  train_data = { x => batch_x, y_ => batch_y, step => i }
+  train_data = { x => batch_x, y_ => batch_y, step => i, pkeep => 0.75 }
 
   # train
   sess.run(train_step, feed_dict: train_data)
 
-  if (i % 50 == 0)
+  if (i % 10 == 0)
     # File.write("profile.json", TensorStream::ReportTool.profile_for(sess).to_json)
     # success? add code to print it
-    a_train, c_train = sess.run([accuracy, cross_entropy], feed_dict: train_data)
+    a_train, c_train, l = sess.run([accuracy, cross_entropy, lr], feed_dict: { x => batch_x, y_ => batch_y, step => i, pkeep => 1.0})
+    puts "#{i}: accuracy:#{a_train} loss:#{c_train} (lr:#{l})"
+  end
 
+  if (i % 100 == 0)
     # success on test data?
-    a_test, c_test = sess.run([accuracy, cross_entropy], feed_dict: test_data)
-    puts "#{i} train accuracy #{a_train}, error #{c_train} test accuracy #{a_test}, error #{c_test}"
+    a_test, c_test = sess.run([accuracy, cross_entropy], feed_dict: test_data, pkeep => 1.0)
+    puts("#{i}: ******** test accuracy: #{a_test} test loss: #{c_test}")
   end
 end
 

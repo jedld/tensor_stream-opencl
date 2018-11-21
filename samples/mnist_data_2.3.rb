@@ -1,6 +1,7 @@
 # A ruby port of the example code discussed by Martin Gorner in
 # "TensorFlow and Deep Learning without a PhD, Part 1 (Google Cloud Next '17)""
 #
+# Five Layers with relu decay
 # https://www.youtube.com/watch?v=u4alGiomYP4
 #
 # Requirements:
