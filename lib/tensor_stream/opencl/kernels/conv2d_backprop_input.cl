@@ -19,8 +19,16 @@ __kernel void conv2d_backprop_input(const int height, const int width, __global 
       for (int out_channel_index = 0; out_channel_index < <%= out_ch %>; out_channel_index++) {
         for(int y = 0; y < <%= fh %>; y++) {
           for (int x = 0; x < <%= fw %>; x++) {
-            if ( (y <= h_index) && (x <= w_index) && ( (h_index - y) % <%= stride[0]%> == 0) && ( (w_index - x) % <%= stride[1]%> == 0)) {
-              <%= ctype %> imag_grad = grad[image_index + ( (h_index - y) / <%= stride[0] %>) * image_row_width + ( (w_index - x) / <%= stride[1] %>) * <%= out_ch %> + out_channel_index];
+            int y_offset = h_index - y + <%= padding[0] %>;
+            int x_offset = w_index - x + <%= padding[1] %>;
+
+            if ( ( y_offset >= 0) && (x_offset >= 0) && 
+                 ( y_offset % <%= stride[0]%> == 0) && 
+                 ( x_offset % <%= stride[1]%> == 0) &&
+                 ( h_index + (<%= fh %> - y - 1) < (height + <%= padding[0] %>)) &&
+                 ( w_index + (<%= fw %> - x - 1) < (width + <%= padding[1] %>))
+                 ) {
+              <%= ctype %> imag_grad = grad[image_index + ( y_offset / <%= stride[0] %>) * image_row_width + ( x_offset / <%= stride[1] %>) * <%= out_ch %> + out_channel_index];
               g += imag_grad * filter[y * <%= fw * ch * out_ch %> + x * <%= ch * out_ch %> + (channel_index*<%= out_ch %>) + out_channel_index];
             }
           }

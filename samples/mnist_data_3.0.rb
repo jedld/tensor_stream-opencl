@@ -119,7 +119,6 @@ sess.run(init)
 mnist_train = mnist.train
 test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
 
-binding.pry
 
 (0..10001).each do |i|
   # load batch of images and correct answers

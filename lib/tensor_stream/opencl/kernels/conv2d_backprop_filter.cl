@@ -14,8 +14,11 @@ __kernel void conv2d_backprop_filter(const int batch_size, const int height, con
         const int image_index = batch * height * width * <%= out_ch %>;
         for(int y = 0; y < height; y++) {
           for (int x = 0; x < width; x++) {
-            if ( ((y - fh_index) % <%= stride[0]%>) == 0  && ((x - fw_index) % <%= stride[1]%>) == 0 && fh_index <= y && fw_index <= x) {
-              const <%= ctype %> image_grad = grad[image_index + ((y - fh_index) / <%= stride[0] %>) * grad_image_row_width + ((x - fw_index) / <%= stride[1] %>) * <%= out_ch %> + f_out_channel];
+            int y_offset = y - fh_index + <%= padding[0] %>;
+            int x_offset = x - fw_index + <%= padding[1] %>;
+
+            if ( (y_offset % <%= stride[0]%>) == 0  && (x_offset % <%= stride[1]%>) == 0 && y_offset >=0 && x_offset >= 0) {
+              const <%= ctype %> image_grad = grad[image_index + (y_offset / <%= stride[0] %>) * grad_image_row_width + ( x_offset / <%= stride[1] %>) * <%= out_ch %> + f_out_channel];
               grad_sum += images[batch * image_size + y * width * <%= ch %> + x * <%= ch %> + channel] * image_grad;
             }
           }
