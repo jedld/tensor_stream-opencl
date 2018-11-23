@@ -222,7 +222,7 @@ module TensorStream
             m, n = a.shape
 
             raise "unsupported rank " if a.shape.size > 2
-            
+
             work_group = [m]
             n = m if n.nil?
             cl_n = OpenCL::Int1.new(n || 1)
@@ -370,11 +370,10 @@ module TensorStream
             raise TensorStream::ValueError, " Current implementation does not yet support strides in the batch and depth dimensions." if strides[0] != 1 || strides[3] != 1
 
             padding_option = tensor.options[:padding]
-            padding = conv2d_padding_options(padding_option, filter_shape)
-
+            padding = conv2d_padding_options(padding_option, filter_shape, height, width, height_stride, width_stride)
             event_wait_list = build_event_wait_list(inputs)
 
-            f_height, f_width, in_channels, out_channels = filter_shape
+            f_height, f_width, _in_channels, out_channels = filter_shape
             out_shape = [batch, height / height_stride, width / width_stride, out_channels]
             output_buffer = _create_result_buffer(tensor.data_type, out_shape, tensor.name)
 
@@ -405,7 +404,7 @@ module TensorStream
             f_height, f_width, in_channels, out_channels = filter_shape
 
             padding_option = tensor.options[:padding]
-            padding = conv2d_padding_options(padding_option, filter_shape)
+            padding = conv2d_padding_options(padding_option, filter_shape, height, width, height_stride, width_stride)
             work_dimen = [batch, height, width]
 
             cl_image_height = OpenCL::Int1.new(height)
@@ -428,12 +427,12 @@ module TensorStream
             filter_shape = read_final_result(complete_eval(filter_shape, context))
             output_buffer = _create_result_buffer(tensor.data_type, filter_shape, tensor.name)
 
-            padding_option = tensor.options[:padding]
-            padding = conv2d_padding_options(padding_option, filter_shape)
-
             batch_size, height, width, channels = images.shape
             f_height, f_width, input_channels, output_channels = filter_shape
             work_dimen = [f_height, f_width, output_channels]
+
+            padding_option = tensor.options[:padding]
+            padding = conv2d_padding_options(padding_option, filter_shape, height, width, height_stride, width_stride)
 
             cl_batch_size = OpenCL::Int1.new(batch_size)
             cl_image_height = OpenCL::Int1.new(height)
@@ -444,17 +443,30 @@ module TensorStream
             output_buffer
           end
 
-          def conv2d_padding_options(padding_option, filter_shape)
-            padding = case padding_option
-                      when 'SAME'
-                        [(filter_shape[0] - 1) / 2, (filter_shape[1] - 1) / 2, (filter_shape[0] - 1) / 2, (filter_shape[1] - 1) / 2]
-                      when 'VALID'
-                        [0, 0, (filter_shape[0] - 1), (filter_shape[1] - 1)]
-                      else
-                        raise TensorStream::ValueError, "Unsupported padding value #{padding_option}, valid values 'SAME', 'VALID'"
-                      end
+          def conv2d_padding_options(padding_option, filter_shape, height, width, h_stride, w_stride)
+            case padding_option
+            when 'SAME'
+              [
+                calc_pad(height, h_stride, filter_shape[0]),
+                calc_pad(width, w_stride, filter_shape[1]),
+                calc_pad(height, h_stride, filter_shape[0], true),
+                calc_pad(width, w_stride, filter_shape[1], true)
+              ]
+            when 'VALID'
+              [0, 0, (filter_shape[0] - 1), (filter_shape[1] - 1)]
+            else
+              raise TensorStream::ValueError, "Unsupported padding value #{padding_option}, valid values 'SAME', 'VALID'"
+            end
           end
 
+          def calc_pad(w, stride, f_shape, ceil = false)
+            r = ((w / stride - 1) * stride - w + f_shape)
+            if ceil
+              r.odd? ? r / 2 + 1 : r / 2
+            else
+              r / 2
+            end
+          end
         end
       end
     end
