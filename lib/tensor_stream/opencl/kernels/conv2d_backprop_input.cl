@@ -1,6 +1,6 @@
 % ctype = dtype_to_c_type(dtype)
 
-__kernel void conv2d_backprop_input(const int height, const int width, __global const <%= ctype %> *filter, __global const <%= ctype %> *grad, __global <%= ctype %> *output) {
+__kernel void conv2d_backprop_input(const int height, const int width, const int out_height, const int out_width, __global const <%= ctype %> *filter, __global const <%= ctype %> *grad, __global <%= ctype %> *output) {
     // Get the index of the current element to be processed
     int batch_index = get_global_id(0);
     int h_index = get_global_id(1); // orig image y
@@ -8,8 +8,8 @@ __kernel void conv2d_backprop_input(const int height, const int width, __global 
 
     int h_index_with_stride = h_index / <%= stride[0] %>;
     int w_index_with_stride = w_index / <%= stride[1] %>;
-    int grad_height = height / <%= stride[0] %>;
-    int grad_width = width / <%= stride[1] %>;
+    int grad_height = out_height;
+    int grad_width = out_width;
 
     int image_index = batch_index * grad_height * grad_width * <%= out_ch %>;
     int image_row_width = grad_width * <%= out_ch %>;

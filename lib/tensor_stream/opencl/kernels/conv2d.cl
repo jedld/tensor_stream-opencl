@@ -1,6 +1,6 @@
 % ctype = dtype_to_c_type(dtype)
 
-__kernel void conv2d(const int height, const int width, __global const <%= ctype %> *images, __global const <%= ctype %> *filter, __global <%= ctype %> *output) {
+__kernel void conv2d(const int height, const int width, const int out_height, const int out_width, __global const <%= ctype %> *images, __global const <%= ctype %> *filter, __global <%= ctype %> *output) {
     // Get the index of the current element to be processed
     const int batch_index = get_global_id(0);
     const int h_index = get_global_id(1);
@@ -10,6 +10,7 @@ __kernel void conv2d(const int height, const int width, __global const <%= ctype
 
     const int image_index = batch_index * height * width * <%= ch %>;
     const int image_row_width = width * <%= ch %>;
+    const int out_image_row_size = out_height * out_width * <%= out_ch %>;
 
     for (int out_channel_index = 0; out_channel_index < <%= out_ch %>; out_channel_index++) {
       <%= ctype %> sum = 0;
@@ -24,6 +25,6 @@ __kernel void conv2d(const int height, const int width, __global const <%= ctype
           }
         }
       }
-      output[batch_index * (height/<%= stride[0] %>) * (width/<%= stride[1] %>) * <%= out_ch %> + h_index * (width/<%= stride[1] %>) * <%= out_ch %> +  w_index * <%= out_ch %> + out_channel_index ] = sum;
+      output[batch_index * out_image_row_size  + h_index * out_width * <%= out_ch %> +  w_index * <%= out_ch %> + out_channel_index ] = sum;
     }
 }

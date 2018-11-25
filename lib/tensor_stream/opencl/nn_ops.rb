@@ -374,16 +374,24 @@ module TensorStream
             event_wait_list = build_event_wait_list(inputs)
 
             f_height, f_width, _in_channels, out_channels = filter_shape
-            out_shape = [batch, height / height_stride, width / width_stride, out_channels]
+
+            out_h = (height - f_height + (padding[0] + padding[2])) / height_stride + 1
+            out_w = (width - f_width + (padding[1] + padding[3])) / width_stride + 1
+
+            out_shape = [batch, out_h, out_w, out_channels]
             output_buffer = _create_result_buffer(tensor.data_type, out_shape, tensor.name)
 
             cl_image_height = OpenCL::Int1.new(height)
             cl_image_width = OpenCL::Int1.new(width)
+            cl_out_height = OpenCL::Int1.new(out_h)
+            cl_out_width = OpenCL::Int1.new(out_w)
 
-            work_dimen = [batch, height / height_stride, width / width_stride]
+            work_dimen = [batch, out_h, out_w]
 
-            output_buffer.op = _cl_program("conv2d", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channel, out_ch: out_channels, stride: [height_stride, width_stride], padding: padding).send(:conv2d, _opencl_queue, work_dimen, cl_image_height, cl_image_width, inputs[0].cl_buffer,
-              inputs[1].cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.op = _cl_program("conv2d", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channel, out_ch: out_channels, stride: [height_stride, width_stride], padding: padding).
+              send(:conv2d, _opencl_queue, work_dimen, cl_image_height, cl_image_width,
+                    cl_out_height, cl_out_width, inputs[0].cl_buffer,
+                    inputs[1].cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer
           end
 
@@ -407,11 +415,18 @@ module TensorStream
             padding = conv2d_padding_options(padding_option, filter_shape, height, width, height_stride, width_stride)
             work_dimen = [batch, height, width]
 
+            out_h = (height - f_height + (padding[0] + padding[2])) / height_stride + 1
+            out_w = (width - f_width + (padding[1] + padding[3])) / width_stride + 1
+
             cl_image_height = OpenCL::Int1.new(height)
             cl_image_width = OpenCL::Int1.new(width)
+            cl_out_height = OpenCL::Int1.new(out_h)
+            cl_out_width = OpenCL::Int1.new(out_w)
 
-            output_buffer.op = _cl_program("conv2d_backprop_input", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: out_channels, stride: [height_stride, width_stride], padding: padding).send(:conv2d_backprop_input, _opencl_queue, work_dimen, cl_image_height, cl_image_width,
-              filter.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.op = _cl_program("conv2d_backprop_input", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: out_channels, stride: [height_stride, width_stride], padding: padding).
+              send(:conv2d_backprop_input, _opencl_queue, work_dimen, cl_image_height, cl_image_width,
+                cl_out_height, cl_out_width, filter.cl_buffer, grad.cl_buffer,
+                output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer
           end
 
@@ -434,12 +449,18 @@ module TensorStream
             padding_option = tensor.options[:padding]
             padding = conv2d_padding_options(padding_option, filter_shape, height, width, height_stride, width_stride)
 
+            out_h = (height - f_height + (padding[0] + padding[2])) / height_stride + 1
+            out_w = (width - f_width + (padding[1] + padding[3])) / width_stride + 1
+
             cl_batch_size = OpenCL::Int1.new(batch_size)
             cl_image_height = OpenCL::Int1.new(height)
             cl_image_width = OpenCL::Int1.new(width)
+            cl_out_height = OpenCL::Int1.new(out_h)
+            cl_out_width = OpenCL::Int1.new(out_w)
 
-            output_buffer.op = _cl_program("conv2d_backprop_filter", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: output_channels, stride: [height_stride, width_stride], padding: padding ).send(:conv2d_backprop_filter, _opencl_queue, work_dimen, cl_batch_size, cl_image_height, cl_image_width,
-              images.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.op = _cl_program("conv2d_backprop_filter", dtype: tensor.data_type, fh: f_height, fw: f_width, ch: channels, out_ch: output_channels, stride: [height_stride, width_stride], padding: padding ).
+              send(:conv2d_backprop_filter, _opencl_queue, work_dimen, cl_batch_size, cl_image_height, cl_image_width,
+                cl_out_height, cl_out_width, images.cl_buffer, grad.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer
           end
 
@@ -453,7 +474,7 @@ module TensorStream
                 calc_pad(width, w_stride, filter_shape[1], true)
               ]
             when 'VALID'
-              [0, 0, (filter_shape[0] - 1), (filter_shape[1] - 1)]
+              [0, 0, 0, 0]
             else
               raise TensorStream::ValueError, "Unsupported padding value #{padding_option}, valid values 'SAME', 'VALID'"
             end

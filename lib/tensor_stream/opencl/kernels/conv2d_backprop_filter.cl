@@ -1,13 +1,13 @@
 % ctype = dtype_to_c_type(dtype)
 
-__kernel void conv2d_backprop_filter(const int batch_size, const int height, const int width, __global const <%= ctype %> *images, __global const <%= ctype %> *grad, __global <%= ctype %> *output) {
+__kernel void conv2d_backprop_filter(const int batch_size, const int height, const int width, const int out_height, const int out_width, __global const <%= ctype %> *images, __global const <%= ctype %> *grad, __global <%= ctype %> *output) {
     // Get the index of the current element to be processed
     const int fh_index = get_global_id(0);
     const int fw_index = get_global_id(1);
     const int f_out_channel = get_global_id(2);
     const int image_size = height * width * <%= ch %>;
-    const int grad_image_row_width = ( width / <%= stride[1] %>) * <%= out_ch %>;
-    const int grad_image_size = (height / <%= stride[0] %>) * (width / <%= stride[1] %>) * <%= out_ch %>;
+    const int grad_image_row_width = out_width * <%= out_ch %>;
+    const int grad_image_size = out_height * out_width * <%= out_ch %>;
 
     for(int channel = 0; channel < <%= ch %>; channel++) {
       <%= ctype %> grad_sum = 0.0;

@@ -15,6 +15,7 @@ require 'pry-byebug'
 require 'tensor_stream/opencl'
 
 tf = TensorStream
+puts "Tensorstream version #{tf.__version__} with OpenCL lib #{TensorStream::Opencl::VERSION}"
 
 # Import MNIST data
 puts "downloading minst data"
@@ -57,7 +58,7 @@ M = 12 # third convolutional layer
 N = 200 # fully connected layer
 
 
-w1 = tf.variable(tf.truncated_normal([5, 5, 1, K], stddev: 0.1))
+w1 = tf.variable(tf.truncated_normal([6, 6, 1, K], stddev: 0.1))
 b1 = tf.variable(tf.ones([K])/10)
 
 w2 = tf.variable(tf.truncated_normal([5, 5, K, L], stddev: 0.1))
