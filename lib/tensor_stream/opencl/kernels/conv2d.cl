@@ -5,8 +5,8 @@ __kernel void conv2d(const int height, const int width, __global const <%= ctype
     const int batch_index = get_global_id(0);
     const int h_index = get_global_id(1);
     const int w_index = get_global_id(2);
-    const int h_index_with_stride = (h_index - <%= padding[0] %>) * <%= stride[0] %>;
-    const int w_index_with_stride = (w_index - <%= padding[1] %>) * <%= stride[1] %>;
+    const int h_index_with_stride = h_index * <%= stride[0] %> - <%= padding[0] %>;
+    const int w_index_with_stride = w_index * <%= stride[1] %> - <%= padding[1] %>;
 
     const int image_index = batch_index * height * width * <%= ch %>;
     const int image_row_width = width * <%= ch %>;
@@ -17,7 +17,7 @@ __kernel void conv2d(const int height, const int width, __global const <%= ctype
         for(int y = 0; y < <%= fh %>; y++) {
           for (int x = 0; x < <%= fw %>; x++) {
             if ( (h_index_with_stride + y) < height && (w_index_with_stride + x) < width &&
-                 (h_index_with_stride + y) >= 0 && (w_index_with_stride + x) >=0 ) {
+                 (h_index_with_stride + y) >= 0 && (w_index_with_stride + x) >=0) {
               <%= ctype %> f = filter[y*<%= fw * ch * out_ch %> + x*<%= ch * out_ch %> + (channel_index*<%= out_ch %>) + out_channel_index];
               sum += images[image_index + (h_index_with_stride + y)*image_row_width + (w_index_with_stride + x)*<%= ch %> + channel_index] * f;
             }

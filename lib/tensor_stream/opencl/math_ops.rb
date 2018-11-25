@@ -20,7 +20,7 @@ module TensorStream
                              m, n = inputs[0].shape
                              [m || 1, n || 1]
                            end
-              
+
               cl_m = OpenCL::Int1.new(work_group[0])
               cl_n = OpenCL::Int1.new(work_group[1])
               cl_switch = OpenCL::Int1.new(0)
@@ -168,6 +168,7 @@ module TensorStream
 
               axis = axis.is_a?(OpenCLBuffer) ? read_final_result(axis) : axis
               input = complete_eval(value, child_context)
+
               value = value.buffer.reshape(*value.shape.reverse)
               rank = input.shape.size - 1
 
