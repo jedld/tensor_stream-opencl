@@ -21,6 +21,7 @@ puts "Tensorstream version #{tf.__version__} with OpenCL lib #{TensorStream::Ope
 puts "downloading minst data"
 # Download images and labels into mnist.test (10K images+labels) and mnist.train (60K images+labels)
 mnist = Mnist.read_data_sets('/tmp/data', one_hot: true)
+
 puts "downloading finished"
 
 # neural network structure for this sample:
@@ -85,10 +86,7 @@ y3 = tf.nn.relu(tf.nn.conv2d(y2, w3, [1, stride, stride, 1], 'SAME') + b3)
 yy = tf.reshape(y3, [-1, 7 * 7 * M])
 y4 = tf.nn.relu(tf.matmul(yy, w4) + b4)
 
-# dropout to prevent overfitting
-yy4 = tf.nn.dropout(y4, pkeep)
-
-ylogits = tf.matmul(yy4, w5) + b5
+ylogits = tf.matmul(y4, w5) + b5
 
 # model
 y = tf.nn.softmax(ylogits)
@@ -140,6 +138,8 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
     # success on test data?
     a_test, c_test = sess.run([accuracy, cross_entropy], feed_dict: test_data, pkeep => 1.0)
     puts("#{i}: ******** test accuracy: #{a_test} test loss: #{c_test}")
+
+
   end
 end
 

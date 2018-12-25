@@ -54,18 +54,10 @@ b5 = tf.variable(tf.zeros([10]))
 x_ = tf.reshape(x, [-1, 784])
 
 y1 = tf.nn.relu(tf.matmul(x_, w1) + b1)
-y1d = tf.nn.dropout(y1, pkeep)
-
-y2 = tf.nn.relu(tf.matmul(y1d, w2) + b2)
-y2d = tf.nn.dropout(y2, pkeep)
-
-y3 = tf.nn.relu(tf.matmul(y2d, w3) + b3)
-y3d = tf.nn.dropout(y3, pkeep)
-
-y4 = tf.nn.relu(tf.matmul(y3d, w4) + b4)
-y4d = tf.nn.dropout(y4, pkeep)
-
-ylogits = tf.matmul(y4d, w5) + b5
+y2 = tf.nn.relu(tf.matmul(y1, w2) + b2)
+y3 = tf.nn.relu(tf.matmul(y2, w3) + b3)
+y4 = tf.nn.relu(tf.matmul(y3, w4) + b4)
+ylogits = tf.matmul(y4, w5) + b5
 
 # model
 y = tf.nn.softmax(ylogits)

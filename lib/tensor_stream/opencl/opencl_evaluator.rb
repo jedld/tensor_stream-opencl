@@ -329,28 +329,14 @@ module TensorStream
         tensor = tensor.call if tensor.is_a?(Proc)
 
         child_context = execution_context.dup
-        res = if tensor.is_a?(Operation)
-                if !on_same_device?(tensor) # tensor is on another device or evaluator
-                  perform_transition(tensor, tensor, @context[:_cache][:placement][tensor.name][1], execution_context)
-                else
-                  eval_operation(tensor, child_context)
-                end
-              elsif tensor.is_a?(Variable)
-                eval_variable(tensor, child_context)
-              elsif tensor.is_a?(Placeholder)
-                resolve_placeholder(tensor, child_context)
+        res = if !on_same_device?(tensor) # tensor is on another device or evaluator
+                perform_transition(tensor, tensor, @context[:_cache][:placement][tensor.name][1], execution_context)
               else
-                eval_tensor(tensor, child_context)
+                eval_operation(tensor, child_context)
               end
+
         execution_context.deep_merge!(returns: child_context[:returns])
         res
-      end
-
-      def eval_variable(tensor, _child_context)
-        raise "variable #{tensor.name} not initalized" if tensor.value.nil? && (tensor.buffer.nil? || !tensor.buffer.dirty)
-
-        tensor.buffer = wrap_opencl(tensor, name: tensor.name) if tensor.buffer.nil?
-        tensor.buffer
       end
 
       register_op :no_op do |_context, _tensor, _inputs|
@@ -455,6 +441,10 @@ module TensorStream
         nil
       end
 
+      register_op :const do |_context, tensor, inputs|
+        wrap_opencl(tensor.const_value, name: tensor.name, data_type: tensor.data_type)
+      end
+
       register_op :size do |_context, tensor, inputs|
         wrap_opencl(inputs[0].buffer.size, name: tensor.name, data_type: tensor.options[:out_type] || :int32)
       end
@@ -514,7 +504,7 @@ module TensorStream
         # File.write('/home/jedld/workspace/tensor_stream/samples/error.graphml', TensorStream::Graphml.new.get_string(tensor, @session))
 
         # File.write('/Users/josephemmanueldayo/workspace/gradients.graphml', TensorStream::Graphml.new.get_string(tensor, @session))
-        raise EvaluatorExcecutionException.new(e, tensor), "error #{e.message} while evaluating #{tensor.name} : #{tensor.to_math(true, 1)} defined at #{tensor.source}"
+        raise EvaluatorExcecutionException.new(e, tensor), "error #{e.message} while evaluating #{tensor.name} : defined at #{tensor.source}"
       end
 
       def eval_tensor(tensor, child_context)
@@ -539,21 +529,17 @@ module TensorStream
         assign = tensor.inputs[0] || tensor
         buffer = complete_eval(b, child_context)
 
-        if assign.buffer
+        if assign.container_buffer
           event_wait_list = build_event_wait_list([buffer, assign.buffer])
-          assign.buffer.op = if assign.buffer.cl_buffer != buffer.cl_buffer
-                               _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.buffer.cl_buffer, event_wait_list: event_wait_list)
+          assign.container_buffer.op = if assign.container_buffer.cl_buffer != buffer.cl_buffer
+                               _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
                              else
                                buffer.op
                              end
-        else
-          value = read_final_result(buffer)
-          assign.buffer = convert_to_opencl(value, buffer.shape, data_type: tensor.data_type, name: assign.name)
-          assign.value = value
         end
 
-        assign.buffer.dirty = true
-        assign.buffer
+        assign.container_buffer.dirty = true
+        assign.container_buffer
       end
 
       def execute_2_operand_func(op_name, tensor, a, b, prog_name = nil)
@@ -572,7 +558,7 @@ module TensorStream
                        [m || 1, n || 1]
                      elsif (b.shape.size == 1) && (result_shape.last == b.shape.last)
                       last_dim = b.shape.last
-                      [result_shape.reduce(:*) / last_dim, last_dim] 
+                      [result_shape.reduce(:*) / last_dim, last_dim]
                      else
                        raise "rank > 2 not supported for now"
                      end
