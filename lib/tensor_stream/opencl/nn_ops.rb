@@ -11,12 +11,12 @@ module TensorStream
 
             assign = tensor.inputs[0] || tensor
 
-            assign.buffer.dirty = true # force buffer copy when variable is read externally
-            output_buffer = assign.buffer
+            assign.container_buffer.dirty = true # force buffer copy when variable is read externally
+            output_buffer = assign.container_buffer
 
             work_group = [output_buffer.total_elements]
 
-            event_wait_list = build_event_wait_list([assign.buffer, learning_rate, delta])
+            event_wait_list = build_event_wait_list([assign.container_buffer, learning_rate, delta])
 
             event = call_program("apply_gradient", output_buffer.data_type,
                            work_group,
@@ -33,21 +33,21 @@ module TensorStream
 
             assign = tensor.inputs[0] || tensor
             assign_acc = tensor.inputs[1]
-            assign.buffer.dirty = true # force buffer copy when variable is read externally
-            assign_acc.buffer.dirty = true # force buffer copy when variable is read externally
+            assign.container_buffer.dirty = true # force buffer copy when variable is read externally
+            assign_acc.container_buffer.dirty = true # force buffer copy when variable is read externally
 
-            output_buffer = assign.buffer
+            output_buffer = assign.container_buffer
 
             work_group = [output_buffer.total_elements]
 
-            event_wait_list = build_event_wait_list([assign.buffer, assign_acc.buffer, learning_rate, grad, momentum])
+            event_wait_list = build_event_wait_list([assign.container_buffer, assign_acc.container_buffer, learning_rate, grad, momentum])
             method_call = :"apply_momentum_#{output_buffer.data_type}"
             event = _cl_program("apply_momentum", nesterov: tensor.options[:use_nesterov], dtype: output_buffer.data_type).
                         send(method_call, _opencl_queue, work_group, grad.cl_buffer,
                             learning_rate.cl_buffer, momentum.cl_buffer, output_buffer.cl_buffer,
-                            assign_acc.buffer.cl_buffer, event_wait_list: event_wait_list)
+                            assign_acc.container_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer.op = event
-            assign_acc.buffer.op = event
+            assign_acc.container_buffer.op = event
             output_buffer
           end
 
@@ -58,11 +58,11 @@ module TensorStream
             assign_acc_update = tensor.inputs[2]
 
             # mark variable buffers as dirty
-            assign.buffer.dirty = true # force buffer copy when variable is read externally
-            assign_acc.buffer.dirty = true # force buffer copy when variable is read externally
-            assign_acc_update.buffer.dirty = true # force buffer copy when variable is read externally
+            assign.container_buffer.dirty = true # force buffer copy when variable is read externally
+            assign_acc.container_buffer.dirty = true # force buffer copy when variable is read externally
+            assign_acc_update.container_buffer.dirty = true # force buffer copy when variable is read externally
 
-            output_buffer = assign.buffer
+            output_buffer = assign.container_buffer
 
             work_group = [output_buffer.total_elements]
 
@@ -73,13 +73,13 @@ module TensorStream
                                       rho.cl_buffer,
                                       epsilon.cl_buffer,
                                       grad.cl_buffer,
-                                      assign.buffer.cl_buffer,
-                                      assign_acc.buffer.cl_buffer,
-                                      assign_acc_update.buffer.cl_buffer,
+                                      assign.container_buffer.cl_buffer,
+                                      assign_acc.container_buffer.cl_buffer,
+                                      assign_acc_update.container_buffer.cl_buffer,
                                       event_wait_list: event_wait_list)
             output_buffer.op = event
-            assign_acc.buffer.op = event
-            assign_acc_update.buffer.op = event
+            assign_acc.container_buffer.op = event
+            assign_acc_update.container_buffer.op = event
             output_buffer
           end
 
@@ -92,11 +92,11 @@ module TensorStream
             assign_v = tensor.inputs[2]
 
             # mark variable buffers as dirty
-            assign.buffer.dirty = true # force buffer copy when variable is read externally
-            assign_m.buffer.dirty = true # force buffer copy when variable is read externally
-            assign_v.buffer.dirty = true # force buffer copy when variable is read externally
+            assign.container_buffer.dirty = true # force buffer copy when variable is read externally
+            assign_m.container_buffer.dirty = true # force buffer copy when variable is read externally
+            assign_v.container_buffer.dirty = true # force buffer copy when variable is read externally
 
-            output_buffer = assign.buffer
+            output_buffer = assign.container_buffer
 
             work_group = [output_buffer.total_elements]
 
@@ -110,13 +110,13 @@ module TensorStream
                                       beta1_t.cl_buffer,
                                       beta2_t.cl_buffer,
                                       epsilon_t.cl_buffer,
-                                      assign_m.buffer.cl_buffer,
-                                      assign.buffer.cl_buffer,
-                                      assign_v.buffer.cl_buffer,
+                                      assign_m.container_buffer.cl_buffer,
+                                      assign.container_buffer.cl_buffer,
+                                      assign_v.container_buffer.cl_buffer,
                                       event_wait_list: event_wait_list)
             output_buffer.op = event
-            assign_m.buffer.op = event
-            assign_v.buffer.op = event
+            assign_m.container_buffer.op = event
+            assign_v.container_buffer.op = event
             output_buffer
           end
 
@@ -126,9 +126,9 @@ module TensorStream
             assign = tensor.inputs[0] || tensor
             assign_acc = tensor.inputs[1]
 
-            assign.buffer.dirty = true
-            assign_acc.buffer.dirty = true
-            output_buffer = assign.buffer
+            assign.container_buffer.dirty = true
+            assign_acc.container_buffer.dirty = true
+            output_buffer = assign.container_buffer
 
             work_group = [output_buffer.total_elements]
 
@@ -138,11 +138,11 @@ module TensorStream
                                       work_group,
                                       lr.cl_buffer,
                                       grad.cl_buffer,
-                                      assign.buffer.cl_buffer,
-                                      assign_acc.buffer.cl_buffer,
+                                      assign.container_buffer.cl_buffer,
+                                      assign_acc.container_buffer.cl_buffer,
                                       event_wait_list: event_wait_list)
             output_buffer.op = event
-            assign_acc.buffer.op = event
+            assign_acc.container_buffer.op = event
             output_buffer
           end
 
@@ -154,11 +154,11 @@ module TensorStream
             assign_ms = tensor.inputs[2]
             assign_mom = tensor.inputs[3]
 
-            assign.buffer.dirty = true
-            assign_mg.buffer.dirty = true
-            assign_ms.buffer.dirty = true
-            assign_mom.buffer.dirty = true
-            output_buffer = assign.buffer
+            assign.container_buffer.dirty = true
+            assign_mg.container_buffer.dirty = true
+            assign_ms.container_buffer.dirty = true
+            assign_mom.container_buffer.dirty = true
+            output_buffer = assign.container_buffer
             event_wait_list = build_event_wait_list(inputs)
             work_group = [output_buffer.total_elements]
 
@@ -168,30 +168,30 @@ module TensorStream
                             momentum.cl_buffer,
                             epsilon.cl_buffer,
                             grad.cl_buffer,
-                            assign.buffer.cl_buffer,
-                            assign_ms.buffer.cl_buffer,
-                            assign_mg.buffer.cl_buffer,
-                            assign_mom.buffer.cl_buffer,
+                            assign.container_buffer.cl_buffer,
+                            assign_ms.container_buffer.cl_buffer,
+                            assign_mg.container_buffer.cl_buffer,
+                            assign_mom.container_buffer.cl_buffer,
                             event_wait_list: event_wait_list)
 
             output_buffer.op = event
-            assign_mg.buffer.op = event
-            assign_ms.buffer.op = event
-            assign_mom.buffer.op = event
+            assign_mg.container_buffer.op = event
+            assign_ms.container_buffer.op = event
+            assign_mom.container_buffer.op = event
             output_buffer
           end
 
-          register_op :apply_rms_prop do |context, tensor, inputs|
+          register_op :apply_rms_prop do |_context, tensor, inputs|
             var, ms, mom, lr, rho, momentum, epsilon, grad = inputs
 
             assign = tensor.inputs[0]
             assign_ms = tensor.inputs[1]
             assign_mom = tensor.inputs[2]
 
-            assign.buffer.dirty = true
-            assign_ms.buffer.dirty = true
-            assign_mom.buffer.dirty = true
-            output_buffer = assign.buffer
+            assign.container_buffer.dirty = true
+            assign_ms.container_buffer.dirty = true
+            assign_mom.container_buffer.dirty = true
+            output_buffer = assign.container_buffer
             event_wait_list = build_event_wait_list(inputs)
             work_group = [output_buffer.total_elements]
 
@@ -202,14 +202,14 @@ module TensorStream
                             momentum.cl_buffer,
                             epsilon.cl_buffer,
                             grad.cl_buffer,
-                            assign.buffer.cl_buffer,
-                            assign_ms.buffer.cl_buffer,
-                            assign_mom.buffer.cl_buffer,
+                            assign.container_buffer.cl_buffer,
+                            assign_ms.container_buffer.cl_buffer,
+                            assign_mom.container_buffer.cl_buffer,
                             event_wait_list: event_wait_list)
 
             output_buffer.op = event
-            assign_ms.buffer.op = event
-            assign_mom.buffer.op = event
+            assign_ms.container_buffer.op = event
+            assign_mom.container_buffer.op = event
             output_buffer
           end
 
@@ -273,7 +273,7 @@ module TensorStream
             output_buffer_backprop.op = event
 
             loss = reduction(context, tensor, output_buffer, rank, :sum)
-            TensorStream::Evaluator::OutputGroup.new([loss, output_buffer_backprop],  [tensor.inputs[0].data_type, tensor.inputs[0].data_type])
+            TensorStream::Evaluator::OutputGroup.new([loss, output_buffer_backprop], [tensor.inputs[0].data_type, tensor.inputs[0].data_type])
           end
 
           register_op :softmax_cross_entropy_with_logits_v2_grad do |_context, tensor, inputs|

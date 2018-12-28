@@ -530,12 +530,16 @@ module TensorStream
         buffer = complete_eval(b, child_context)
 
         if assign.container_buffer
-          event_wait_list = build_event_wait_list([buffer, assign.buffer])
+          event_wait_list = build_event_wait_list([buffer, assign.container_buffer])
           assign.container_buffer.op = if assign.container_buffer.cl_buffer != buffer.cl_buffer
-                               _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
-                             else
-                               buffer.op
-                             end
+                                         _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
+                                       else
+                                         buffer.op
+                                       end
+        else
+          value = read_final_result(buffer)
+          assign.options[:container].buffer = convert_to_opencl(value, buffer.shape, data_type: tensor.data_type, name: assign.name)
+          assign.options[:container].value = value
         end
 
         assign.container_buffer.dirty = true
