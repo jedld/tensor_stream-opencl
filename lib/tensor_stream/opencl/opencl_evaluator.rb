@@ -225,7 +225,6 @@ module TensorStream
       def prepare_input(tensor, context, options = {})
         return nil unless tensor
 
-        tensor = resolve_placeholder(tensor)
         if options[:noop]
           tensor
         elsif options[:buffer]
@@ -331,8 +330,10 @@ module TensorStream
         child_context = execution_context.dup
         res = if !on_same_device?(tensor) # tensor is on another device or evaluator
                 perform_transition(tensor, tensor, @context[:_cache][:placement][tensor.name][1], execution_context)
-              else
+              elsif tensor.is_a?(Operation)
                 eval_operation(tensor, child_context)
+              else
+                raise "invalid tensor type!"
               end
 
         execution_context.deep_merge!(returns: child_context[:returns])
@@ -382,14 +383,14 @@ module TensorStream
       end
 
       %i[less less_equal greater greater_equal equal not_equal logical_and].each do |op|
-        register_op op do |context, tensor, inputs|
+        register_op op do |_context, tensor, inputs|
           execute_2_operand_func(op.to_s, tensor, inputs[0], inputs[1], 'cond')
         end
       end
 
       register_op :where, noop: true do |context, tensor, inputs|
-        pred = tensor.options[:pred]
-        execute_cond_func('where', tensor, pred, inputs[0], inputs[1], context)
+        pred = inputs[0]
+        execute_cond_func('where', tensor, pred, inputs[1], inputs[2], context)
       end
 
       register_op :check_numerics, noop: true do |context, tensor, inputs|

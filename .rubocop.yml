@@ -34,6 +34,7 @@ Metrics/CyclomaticComplexity:
 Metrics/BlockLength:
   Exclude:
     - lib/tensor_stream/math_gradients.rb
+    - benchmark/benchmark.rb
 
 Naming/AccessorMethodName:
   Exclude:
@@ -87,3 +88,7 @@ Naming/UncommunicativeMethodParamName:
   Exclude:
     - lib/tensor_stream/evaluator/ruby_evaluator.rb
     - lib/tensor_stream/ops.rb
+
+Style/BlockDelimiters:
+  Exclude:
+    - benchmark/benchmark.rb
