@@ -613,7 +613,7 @@ module TensorStream
         work_group = if p.shape.size > 2
                        [m, p.shape.reduce(:*) / m]
                      else
-                       [ m || 1, n || 1]
+                       [m || 1, n || 1]
                      end
 
         cl_m = OpenCL::Int1.new(work_group[0])
