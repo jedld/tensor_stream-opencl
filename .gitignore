@@ -11,6 +11,7 @@ Gemfile.lock
 *.gem
 *.ckpt
 profile.json
+/test_models/
 
 # rspec failure tracking
 .rspec_status

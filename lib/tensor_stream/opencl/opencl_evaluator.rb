@@ -450,6 +450,28 @@ module TensorStream
         wrap_opencl(inputs[0].buffer.size, name: tensor.name, data_type: tensor.options[:out_type] || :int32)
       end
 
+      register_op :restore_ts do |context, tensor, inputs|
+        inputs = inputs.dup
+        filename = inputs.shift
+        tensor_names = inputs
+
+        filename = read_final_result(complete_eval(filename, context))
+        tensor_names.map! { |n| read_final_result(complete_eval(n, context)) }
+
+        input_dump = YAML.safe_load(File.read(filename), [Symbol])
+        vars = tensor.graph.get_collection(GraphKeys::GLOBAL_VARIABLES)
+
+        vars.select! { |v| input_dump['variables'].key?(v.name) && tensor_names.include?(v.name) }
+        vars.each do |variable|
+          data = TensorStream::Packer.unpack(Zlib::Inflate.inflate(Base64.decode64(input_dump['variables'][variable.name]['data'])), variable.data_type)
+          shape = input_dump['variables'][variable.name]['shape']
+          variable.buffer = convert_to_opencl(data, shape, data_type: variable.data_type, name: variable.name)
+          variable.value = TensorShape.reshape(data, shape)
+        end
+
+        nil
+      end
+
       def eval_operation(tensor, child_context)
         cache_key = "#{tensor.graph.object_id}_opencl_#{tensor.name}:#{object_id}"
         return @context[:_cache][cache_key] if @context[:_cache].key?(cache_key)

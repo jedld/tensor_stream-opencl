@@ -117,8 +117,10 @@ init = tf.global_variables_initializer
 
 sess.run(init)
 
+#Setup save and restore
+model_save_path = "test_models/mnist_data_3.0"
 saver = tf::Train::Saver.new
-saver.restore(sess, "mnist_model")
+saver.restore(sess, model_save_path)
 
 mnist_train = mnist.train
 test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
@@ -143,7 +145,9 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
     # success on test data?
     a_test, c_test = sess.run([accuracy, cross_entropy], feed_dict: test_data, pkeep => 1.0)
     puts("#{i}: ******** test accuracy: #{a_test} test loss: #{c_test}")
-    save_path = saver.save(sess, "mnist_model")
+
+    # save current state of the model
+    save_path = saver.save(sess, model_save_path)
   end
 end
 
