@@ -90,7 +90,7 @@ y4 = tf.nn.relu(tf.matmul(yy, w4) + b4)
 ylogits = tf.matmul(y4, w5) + b5
 
 # model
-y = tf.nn.softmax(ylogits)
+y = tf.nn.softmax(ylogits, name: 'out')
 
 
 
