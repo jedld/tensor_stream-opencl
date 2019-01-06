@@ -374,12 +374,40 @@ module TensorStream
         assign_var(tensor, value, context)
       end
 
-      register_op :variable, noop: true do |_context, tensor, _inputs|
-        variable = tensor.inputs[0]
-        raise "variable #{tensor.name} not initalized" if variable.value.nil? && (variable.buffer.nil? || !variable.buffer.dirty)
+      register_op %i[variable variable_v2], noop: true do |_context, tensor, _inputs|
+        assign = tensor.inputs[0] || tensor
 
-        variable.buffer = wrap_opencl(variable, name: variable.name) if variable.buffer.nil?
-        variable.buffer
+        if assign.container_buffer.nil?
+          value = assign.container
+          raise "Variable #{tensor.name} not initialized!" if value.nil?
+
+          assign.options[:container].buffer = convert_to_opencl(value, shape_eval(value), data_type: tensor.data_type, name: assign.name)
+          assign.options[:container].value = value
+        end
+        assign.container_buffer
+      end
+
+      register_op :placeholder, noop: true do |context, tensor, _inputs|
+        ph = @context[tensor.name.to_sym].tap do |c|
+          raise TensorStream::ValueError, "missing placeholder #{tensor.name}" if c.nil?
+
+          if tensor.shape.shape
+            value_shape = shape_eval(c)
+            placeholder_shape = tensor.shape.shape
+            placeholder_shape.zip(value_shape).each do |p_shape, v_shape|
+              next if p_shape.nil?
+              raise TensorStream::ValueError, "placeholder expects #{placeholder_shape}, got #{value_shape}" if p_shape != v_shape
+            end
+          end
+        end
+
+        if ph.is_a?(Tensor)
+          raise TensorStream::ValueError, "placeholder expects type #{tensor.data_type}, got #{ph.data_type}" if ph.data_type != tensor.data_type
+
+          global_eval(tensor, ph, context)
+        else
+          convert_to_opencl(ph, shape_eval(ph), data_type:  tensor.data_type, name: tensor.name)
+        end
       end
 
       %i[less less_equal greater greater_equal equal not_equal logical_and].each do |op|
@@ -388,9 +416,31 @@ module TensorStream
         end
       end
 
-      register_op :where, noop: true do |context, tensor, inputs|
+      register_op :where do |context, tensor, inputs|
         pred = inputs[0]
+
         execute_cond_func('where', tensor, pred, inputs[1], inputs[2], context)
+      end
+
+      register_op :case, noop: true do |context, tensor, _inputs|
+        pred = read_final_result(complete_eval(tensor.inputs[0], context))
+        result = nil
+
+        if tensor.options[:exclusive]
+          p_true = pred.each_with_index.collect { |p, index| [p, index] }.select { |a| a[0] }
+          raise TensorStream::ValueError, "more than one predicate returns true pos #{p_true.map { |a| a[1] }.join(',')}" if p_true.size > 1
+        end
+
+        pred.each_with_index do |p, index|
+          next unless p
+
+          result = _run(tensor.inputs[2 + index], context)
+
+          break unless result.nil?
+        end
+
+        result = _run(tensor.inputs[1], context) if result.nil?
+        result
       end
 
       register_op :check_numerics, noop: true do |context, tensor, inputs|
@@ -477,6 +527,7 @@ module TensorStream
         return @context[:_cache][cache_key] if @context[:_cache].key?(cache_key)
         return @context[cache_key] if @context.key?(cache_key)
 
+        # puts "opencl eval #{tensor.operation}"
         invoke(tensor, child_context).tap do |result|
           if tensor.breakpoint
             a = resolve_placeholder(tensor.inputs[0], child_context) if tensor.inputs && tensor.inputs[0]
@@ -620,11 +671,7 @@ module TensorStream
         output_buffer
       end
 
-      def execute_cond_func(op_name, tensor, pred, input_a, input_b, child_context)
-        p = _run(pred, child_context)
-        a = _run(input_a, child_context)
-        b = _run(input_b, child_context)
-
+      def execute_cond_func(op_name, tensor, p, a, b, child_context)
         a, b = auto_type_cast(a, b, name: "#{tensor.name}/cast_#{a.name}_#{b.data_type}")
         dtype = tensor.data_type
 

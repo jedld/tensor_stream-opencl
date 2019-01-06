@@ -64,7 +64,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(100)
+      expect(described_class.ops.keys.size).to eq(103)
     end
 
     specify do
@@ -86,6 +86,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         assign_sub
         broadcast_gradient_args
         broadcast_transform
+        case
         cast
         ceil
         check_numerics
@@ -128,6 +129,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         not_equal
         ones
         ones_like
+        placeholder
         pow
         print
         prod
@@ -166,6 +168,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         transpose
         unstack
         variable
+        variable_v2
         where
         zeros
         zeros_like
