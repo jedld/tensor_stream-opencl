@@ -245,9 +245,9 @@ module TensorStream
             end
 
             OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type,
-              shape: shape.compact, buffer: arr.buffer,
-              cl_buffer: arr.cl_buffer,
-              op: arr.op)
+                                   shape: shape.compact, buffer: arr.buffer,
+                                   cl_buffer: arr.cl_buffer,
+                                   op: arr.op)
           end
 
           register_op :stack do |_context, tensor, inputs|
@@ -313,7 +313,6 @@ module TensorStream
               a << s * a.last
             end.reverse
 
-            step = multipliers[0]
             sub_shape = new_shape.dup
             sub_shape.shift
 
@@ -376,9 +375,9 @@ module TensorStream
                     end
 
             OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type,
-                             shape: shape, buffer: arr.buffer,
-                             cl_buffer: arr.cl_buffer,
-                             op: arr.op)
+                                   shape: shape, buffer: arr.buffer,
+                                   cl_buffer: arr.cl_buffer,
+                                   op: arr.op)
           end
 
           register_op :transpose, buffer: true do |_context, tensor, inputs|

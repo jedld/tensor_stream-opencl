@@ -12,10 +12,11 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
   it_behaves_like "optimizer evaluator"
   it_behaves_like "images ops"
   it_behaves_like "standard nn ops evaluator"
+  it_behaves_like "TensorStream::Train::Saver"
 
   describe "supported TensorStream version" do
     it "returns the version" do
-      expect(TensorStream.version).to eq("1.0.0")
+      expect(TensorStream.version).to eq("1.0.0-rc1")
     end
   end
 
@@ -63,7 +64,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(99)
+      expect(described_class.ops.keys.size).to eq(100)
     end
 
     specify do
@@ -135,6 +136,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         reciprocal
         relu6
         reshape
+        restore_ts
         round
         shape
         shape_n

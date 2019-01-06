@@ -33,13 +33,18 @@ module TensorStream
       end
 
       if shape.empty?
-        return buffer.to_s if data_type == :string
-        return buffer[0] != 0 if data_type == :boolean
-        return buffer[0]
+        return case data_type
+               when :string
+                 buffer.to_s
+               when :boolean
+                 buffer[0] != 0
+               else
+                 buffer[0]
+               end
       end
-      
-      result = buffer.reshape(*shape.map(&:to_i).reverse).to_a 
-      data_type == :boolean ? process_function_op(result, ->(a, _b) { a != 0 }) : result
+
+      result = buffer.reshape(*shape.map(&:to_i).reverse).to_a
+      data_type == :boolean ? process_function_op(result) { |a, _b|  a != 0 } : result
     end
 
     def self.nil_buffer(owner, name, data_type)

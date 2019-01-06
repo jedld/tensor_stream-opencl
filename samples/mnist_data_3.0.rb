@@ -10,6 +10,7 @@ require "bundler/setup"
 require 'tensor_stream'
 require 'mnist-learn'
 require 'pry-byebug'
+require 'csv'
 
 # Enable OpenCL hardware accelerated computation, not using OpenCL can be very slow
 require 'tensor_stream/opencl'
@@ -89,7 +90,7 @@ y4 = tf.nn.relu(tf.matmul(yy, w4) + b4)
 ylogits = tf.matmul(y4, w5) + b5
 
 # model
-y = tf.nn.softmax(ylogits)
+y = tf.nn.softmax(ylogits, name: 'out')
 
 
 
@@ -109,15 +110,20 @@ accuracy =  tf.reduce_mean(tf.cast(is_correct, :float32))
 lr = 0.0001.t +  tf.train.exponential_decay(0.003, step, 2000, 1/Math::E)
 train_step = TensorStream::Train::AdamOptimizer.new(lr).minimize(cross_entropy)
 
-sess = tf.session
+sess = tf.session(profile_enabled: true)
 # Add ops to save and restore all the variables.
 
 init = tf.global_variables_initializer
 
 sess.run(init)
+
+#Setup save and restore
+model_save_path = "test_models/mnist_data_3.0"
+saver = tf::Train::Saver.new
+saver.restore(sess, model_save_path)
+
 mnist_train = mnist.train
 test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
-
 
 (0..10001).each do |i|
   # load batch of images and correct answers
@@ -128,7 +134,8 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
   sess.run(train_step, feed_dict: train_data)
 
   if (i % 10 == 0)
-    # File.write("profile.json", TensorStream::ReportTool.profile_for(sess).to_json)
+    # result = TensorStream::ReportTool.profile_for(sess)
+    # File.write("profile.csv", result.map(&:to_csv).join("\n"))
     # success? add code to print it
     a_train, c_train, l = sess.run([accuracy, cross_entropy, lr], feed_dict: { x => batch_x, y_ => batch_y, step => i, pkeep => 1.0})
     puts "#{i}: accuracy:#{a_train} loss:#{c_train} (lr:#{l})"
@@ -139,7 +146,8 @@ test_data = { x => mnist.test.images, y_ => mnist.test.labels, pkeep => 1.0 }
     a_test, c_test = sess.run([accuracy, cross_entropy], feed_dict: test_data, pkeep => 1.0)
     puts("#{i}: ******** test accuracy: #{a_test} test loss: #{c_test}")
 
-
+    # save current state of the model
+    save_path = saver.save(sess, model_save_path)
   end
 end
 

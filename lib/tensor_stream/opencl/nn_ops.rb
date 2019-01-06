@@ -370,6 +370,7 @@ module TensorStream
             raise TensorStream::ValueError, " Current implementation does not yet support strides in the batch and depth dimensions." if strides[0] != 1 || strides[3] != 1
 
             padding_option = tensor.options[:padding]
+
             padding = conv2d_padding_options(padding_option, filter_shape, height, width, height_stride, width_stride)
             event_wait_list = build_event_wait_list(inputs)
 
