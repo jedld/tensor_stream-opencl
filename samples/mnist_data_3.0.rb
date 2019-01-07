@@ -48,7 +48,7 @@ y_ = tf.placeholder(:float32, shape: [nil, 10])
 # step for variable learning rate
 step = tf.placeholder(:int32)
 
-pkeep = tf.placeholder(tf.float32)
+pkeep = tf.placeholder(:float32)
 
 # three convolutional layers with their channel counts, and a
 # fully connected layer (tha last layer has 10 softmax neurons)
