@@ -90,6 +90,23 @@ module TensorStream
             output_buffer
           end
 
+          register_op :bias_add do |context, tensor, inputs|
+            value, bias = inputs
+            output_buffer = _create_result_buffer(value.data_type, value.shape, tensor.name)
+            result_shape = value.shape.dup
+            bias_length = result_shape.pop
+            work_group = [result_shape.reduce(:*)]
+            event_wait_list = build_event_wait_list([value, bias])
+            dtype = tensor.data_type
+            output_buffer.op = _cl_program('bias_add', step: result_shape.reduce(:*), n: bias_length, dtype: dtype)
+              .send(:"bias_add_#{dtype}", _opencl_queue, work_group, value.cl_buffer,
+                    bias.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer
+          end
+
+          register_op :bias_add_gradient do |context, tensor, inputs|
+          end
+
           %i[sign exp tan acos asin sin cos abs sqrt negate square reciprocal tanh tanh_grad sigmoid log1p round floor ceil log].each do |op|
             register_op op, noop: true do |context, tensor, inputs|
               execute_func(op.to_s, tensor, inputs[0], context)
