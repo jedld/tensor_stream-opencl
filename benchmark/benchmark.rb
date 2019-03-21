@@ -43,6 +43,8 @@ a_int = tf.constant([
   [4, 2, 3, 4, 0, 1, 1, 0, 0, 2, 1, 2],
 ])
 
+large_tensor_bias = tf.constant(sess.run(tf.random_uniform([256])))
+
 b = tf.constant(sess.run(tf.random_uniform(SHAPES)))
 
 c = tf.constant(sess.run(tf.random_uniform(SHAPES)))
@@ -72,6 +74,9 @@ index = large_tensor[0]
 conv2d = tf.nn.conv2d(sample_image, sample_filter, [1, 1, 1, 1], 'SAME')
 conv2d_grad = tf.gradients(conv2d, [sample_image, sample_filter])
 
+bias_add = tf.nn.bias_add(large_tensor, large_tensor_bias)
+bias_add_grad = tf.gradients(bias_add, [large_tensor_bias])
+
 puts TensorStream::Evaluator.default_evaluators
 
 sess2 = tf.session
@@ -80,6 +85,10 @@ puts `cat /proc/cpuinfo | grep "model name" | head -1`
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
+  x.report("pure ruby bias_add_grad            :") { 100.times do sess.run(bias_add_grad) end }
+  x.report("opencl bias_add_grad               :") { 100.times do sess2.run(bias_add_grad) end }
+  x.report("pure ruby bias_add             :") { 100.times do sess.run(bias_add) end }
+  x.report("opencl bias_add                :") { 100.times do sess2.run(bias_add) end }
   x.report("pure ruby conv2d_backprop      :") { 100.times do sess.run(conv2d_grad) end }
   x.report("opencl conv2d_backprop         :") { 100.times do sess2.run(conv2d_grad) end }
   x.report("pure ruby conv2d      :") { 100.times do sess.run(conv2d) end }
