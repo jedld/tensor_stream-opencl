@@ -98,13 +98,26 @@ module TensorStream
             work_group = [result_shape.reduce(:*)]
             event_wait_list = build_event_wait_list([value, bias])
             dtype = tensor.data_type
-            output_buffer.op = _cl_program('bias_add', step: result_shape.reduce(:*), n: bias_length, dtype: dtype)
+            output_buffer.op = _cl_program('bias_add', n: bias_length, dtype: dtype)
               .send(:"bias_add_#{dtype}", _opencl_queue, work_group, value.cl_buffer,
                     bias.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
             output_buffer
           end
 
-          register_op :bias_add_gradient do |context, tensor, inputs|
+          register_op :bias_add_grad do |context, tensor, inputs|
+            received_grad = inputs[0]
+            bias_size = received_grad.shape.last
+            output_buffer = _create_result_buffer(received_grad.data_type, [bias_size], tensor.name)
+            work_group = [bias_size]
+
+            received_grad_shape = received_grad.shape.dup
+            received_grad_shape.pop
+            item_rows = received_grad_shape.reduce(:*)
+            dtype = tensor.data_type
+            output_buffer.op = _cl_program('bias_add_grad', n: bias_size, rows: item_rows, dtype: dtype)
+              .send(:"bias_add_grad_#{dtype}", _opencl_queue, work_group, received_grad.cl_buffer,
+                    output_buffer.cl_buffer, event_wait_list: build_event_wait_list([received_grad]))
+            output_buffer
           end
 
           %i[sign exp tan acos asin sin cos abs sqrt negate square reciprocal tanh tanh_grad sigmoid log1p round floor ceil log].each do |op|

@@ -4,6 +4,6 @@ __kernel void bias_add_<%= dtype %>(__global const <%= c_dtype %> *value, __glob
     const int id = get_global_id(0);
 
     for(int i = 0; i < <%= n %>; i++) {
-      output[<%= step %> * id + i] = value[<%= step %> * i] + bias[i];
+      output[ <%= n %> * id + i] = value[ <%= n %> * id + i] + bias[i];
     }
 }
