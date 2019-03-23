@@ -1,7 +1,7 @@
 % c_dtype = dtype_to_c_type(dtype)
 % o_multipliers = o_shape.dup.drop(1).reverse.inject([1]) { |a, s| a << s * a.last }.reverse
 % i_multipliers = shape.dup.drop(1).reverse.inject([1]) { |a, s| a << s * a.last }.reverse
-% out_ops = o_multipliers.map.with_index { |m, index| "id_#{index} * #{m}"}.join(' + ')
+% out_ops = o_multipliers.map.with_index { |m, index| "id_#{index} * #{m}" }.join(' + ')
 % in_axis_multipliers = i_multipliers.select.with_index { |m, index| axis.include?(index) }
 % in_axis_ops =  in_axis_multipliers.map.with_index { |m, index| "i_#{index} * #{m}"}.join(' + ')
 % in_output_multipliers = i_multipliers.reject.with_index { |m, index| axis.include?(index) }

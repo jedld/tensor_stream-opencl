@@ -69,6 +69,7 @@ split = tf.split(a, 4)
 sum = tf.reduce_sum(large_tensor)
 sum_axis_1 = tf.reduce_sum(large_tensor, 1)
 min = tf.min(large_tensor, 1)
+argmin = tf.argmin(large_tensor)
 index = large_tensor[0]
 
 conv2d = tf.nn.conv2d(sample_image, sample_filter, [1, 1, 1, 1], 'SAME')
@@ -85,6 +86,8 @@ puts `cat /proc/cpuinfo | grep "model name" | head -1`
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
+  x.report("pure ruby argmin            :") { 100.times do sess.run(argmin) end }
+  x.report("opencl argmin               :") { 100.times do sess2.run(argmin) end }
   x.report("pure ruby bias_add_grad            :") { 100.times do sess.run(bias_add_grad) end }
   x.report("opencl bias_add_grad               :") { 100.times do sess2.run(bias_add_grad) end }
   x.report("pure ruby bias_add             :") { 100.times do sess.run(bias_add) end }

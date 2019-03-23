@@ -140,25 +140,18 @@ module TensorStream
             end
           end
 
-          # register_op :argmin, buffer: true do |_context, tensor, inputs|
-          #   axis = inputs[1].nil? || inputs[1].buffer.nil? || inputs[1].buffer.empty? ? 0 : inputs[1].buffer
-          #   rank = inputs[0].shape.size
-          #   raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
+          %i[argmin argmax].each do |op|
+            register_op op do |context, tensor, inputs|
+              value, axis = inputs
+              rank = value.shape.size
+              axis = 0 if axis.nil?
 
-          #   arr = inputs[0].buffer.reshape(*inputs[0].shape.reverse).to_a
-          #   op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a < b })
-          #   convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
-          # end
+              axis = axis.is_a?(OpenCLBuffer) ? read_final_result(axis) : axis
+              raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
 
-          # register_op :argmax, buffer: true do |_context, tensor, inputs|
-          #   axis = inputs[1].nil? || inputs[1].buffer.nil? || inputs[1].buffer.empty? ? 0 : inputs[1].buffer
-          #   rank = inputs[0].shape.size
-          #   raise TensorStream::InvalidArgumentError, "Expected dimension in the range [#{-rank},#{rank}) but got #{axis}" if axis < -rank || axis >= rank
-
-          #   arr = inputs[0].buffer.reshape(*inputs[0].shape.reverse).to_a
-          #   op = get_op_with_axis(arr, axis, 0, inputs[0].data_type, ->(a, b) { a > b })
-          #   convert_to_opencl(op, shape_eval(op), data_type: tensor.data_type, name: tensor.name)
-          # end
+              reduce_multi_axis(context, tensor, value, axis, 'arg', op.to_sym)
+             end
+          end
 
           def reduction(child_context, tensor, value, axis, func)
             if axis.nil?
@@ -194,31 +187,34 @@ module TensorStream
                 end
                end
             else
-              return value if value.shape.empty?
-
-              rank = value.shape.size
-
-              axis = axis.is_a?(OpenCLBuffer) ? read_final_result(axis) : axis
-
-              axis = [axis] unless axis.is_a?(Array)
-              return value if axis.empty?
-              # remap negative values
-              axis.map! { |axis| axis < 0 ? rank - axis.abs : axis }
-
-              new_shape = value.shape.collect.with_index { |v, index| axis.include?(index) ? nil : v }.compact
-
-              buffer_shape = tensor.options[:keepdims] ? _reduced_shape(value.shape.dup, axis) : new_shape
-              output_buffer = _create_result_buffer(value.data_type, buffer_shape, tensor.name)
-
-              work_group = new_shape.empty? ? [1] : new_shape
-              dtype = value.data_type
-
-              output_buffer.op = _cl_program('reduce_axis', f: func, axis: axis, shape: value.shape, o_shape: new_shape, dtype: dtype)
-                  .send("reduce_axis_#{dtype}", _opencl_queue, work_group, value.cl_buffer,
-                        output_buffer.cl_buffer, event_wait_list: build_event_wait_list([value]))
-
-              output_buffer
+              reduce_multi_axis(child_context, tensor, value, axis, 'reduce', func)
             end
+          end
+
+          def reduce_multi_axis(child_context, tensor, value, axis, prog, func)
+            return value if value.shape.empty?
+
+            rank = value.shape.size
+
+            axis = axis.is_a?(OpenCLBuffer) ? read_final_result(axis) : axis
+            axis = [axis] unless axis.is_a?(Array)
+            return value if axis.empty?
+            # remap negative values
+            axis.map! { |axis| axis < 0 ? rank - axis.abs : axis }
+
+            new_shape = value.shape.collect.with_index { |v, index| axis.include?(index) ? nil : v }.compact
+
+            buffer_shape = tensor.options[:keepdims] ? _reduced_shape(value.shape.dup, axis) : new_shape
+            output_buffer = _create_result_buffer(tensor.options[:output_type] || tensor.data_type, buffer_shape, tensor.name)
+
+            work_group = new_shape.empty? ? [1] : new_shape
+            dtype = value.data_type
+
+            output_buffer.op = _cl_program("#{prog}_axis", f: func, axis: axis, shape: value.shape, o_shape: new_shape, dtype: dtype, out_dtype: tensor.options[:output_type])
+                .send("#{prog}_axis_#{dtype}", _opencl_queue, work_group, value.cl_buffer,
+                      output_buffer.cl_buffer, event_wait_list: build_event_wait_list([value]))
+
+            output_buffer
           end
         end
       end
