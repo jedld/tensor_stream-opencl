@@ -16,7 +16,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   describe "supported TensorStream version" do
     it "returns the version" do
-      expect(TensorStream.version).to eq("1.0.5")
+      expect(TensorStream.version).to eq("1.0.6")
     end
   end
 
@@ -64,7 +64,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(103)
+      expect(described_class.ops.keys.size).to eq(107)
     end
 
     specify do
@@ -80,10 +80,14 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         apply_gradient_descent
         apply_momentum
         apply_rms_prop
+        argmax
+        argmin
         asin
         assign
         assign_add
         assign_sub
+        bias_add
+        bias_add_grad
         broadcast_gradient_args
         broadcast_transform
         case

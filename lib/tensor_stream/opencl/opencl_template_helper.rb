@@ -76,6 +76,27 @@ class OpenclTemplateHelper
     end
   end
 
+  def max_value_for(dtype)
+    case dtype.to_s
+    when 'float64'
+      'DBL_MAX'
+    when 'float32', 'float', 'float16'
+      'FLT_MAX'
+    when 'int32', 'int'
+      'INT_MAX'
+    when 'uint32', 'uint16'
+      '0'
+    when 'int16'
+      'SHRT_MAX'
+    when 'int8'
+      '256'
+    when 'boolean'
+      '1'
+    else
+      raise "unknown dtype #{dtype}"
+    end
+  end
+
   def operator_to_c(op)
     case op
     when 'less'

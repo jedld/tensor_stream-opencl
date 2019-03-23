@@ -1,8 +1,14 @@
 % c_dtype = dtype_to_c_type(dtype)
- __kernel void argmin_<%= dtype %>(const int M, const int N, const int switch_op, __global const <%= c_dtype %> *A, __global const <%= c_dtype %> *B, __global <%= c_dtype %> *C) {
-    // Get the index of the current element to be processed
-    const int globalRow = get_global_id(0); // Row ID of C (0..M)
-    const int globalCol = get_global_id(1); // Col ID of C (0..N)
-    
-    C[globalRow * N + globalCol] = A[globalRow * N + globalCol] + B[globalRow * N + globalCol];
+% out_c_dtype = dtype_to_c_type(out_dtype)
+__kernel void argmin_<%= dtype %>(__global const <%= c_dtype %> *A, __global <%= c_dtype %> *C) {
+    <%= c_dtype %> min = <%= max_value_for(dtype) %>;
+    <%= out_c_dtype %> min_index = 0;
+
+    for(int i = 0; i < <%= n %>; i++) {
+        if (A[i] < min) {
+            min = A[i];
+            min_index = i;
+        }
+    }
+    C[0] = min_index;
 }

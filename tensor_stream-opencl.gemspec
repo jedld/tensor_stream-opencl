@@ -39,7 +39,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "awesome_print"
   spec.add_development_dependency "mnist-learn"
   spec.add_development_dependency "simplecov"
-  spec.add_dependency "tensor_stream", "1.0.5"
+  spec.add_dependency "tensor_stream", "1.0.6"
   spec.add_dependency "opencl_ruby_ffi"
   spec.add_dependency "oily_png"
 end
