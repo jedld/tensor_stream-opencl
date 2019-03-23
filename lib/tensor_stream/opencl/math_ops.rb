@@ -196,30 +196,28 @@ module TensorStream
             else
               return value if value.shape.empty?
 
+              rank = value.shape.size
+
               axis = axis.is_a?(OpenCLBuffer) ? read_final_result(axis) : axis
-              input = complete_eval(value, child_context)
 
-              value = value.buffer.reshape(*value.shape.reverse)
-              rank = input.shape.size - 1
+              axis = [axis] unless axis.is_a?(Array)
+              return value if axis.empty?
+              # remap negative values
+              axis.map! { |axis| axis < 0 ? rank - axis.abs : axis }
 
-              if axis.is_a?(Array)
-                axis.map { |x| rank - x.abs }.sort.reverse_each do |x|
-                  value = value.send(func, x.to_i)
-                end
-              else
-                value = value.send(func, rank - axis.abs)
-              end
+              new_shape = value.shape.collect.with_index { |v, index| axis.include?(index) ? nil : v }.compact
 
-              new_shape = if value.is_a?(NArray)
-                            value.shape.reverse
-                          else
-                            value = [value]
-                            []
-                          end
+              buffer_shape = tensor.options[:keepdims] ? _reduced_shape(value.shape.dup, axis) : new_shape
+              output_buffer = _create_result_buffer(value.data_type, buffer_shape, tensor.name)
 
-              new_shape = _reduced_shape(input.shape.dup, axis) if tensor.options[:keepdims]
+              work_group = new_shape.empty? ? [1] : new_shape
+              dtype = value.data_type
 
-              convert_to_opencl(value.flatten, new_shape, data_type: tensor.data_type, name: tensor.name)
+              output_buffer.op = _cl_program('reduce_axis', f: func, axis: axis, shape: value.shape, o_shape: new_shape, dtype: dtype)
+                  .send("reduce_axis_#{dtype}", _opencl_queue, work_group, value.cl_buffer,
+                        output_buffer.cl_buffer, event_wait_list: build_event_wait_list([value]))
+
+              output_buffer
             end
           end
         end
