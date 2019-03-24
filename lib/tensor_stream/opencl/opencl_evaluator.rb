@@ -167,12 +167,19 @@ module TensorStream
       def complete_eval(tensor, context)
         return nil if tensor.nil?
 
-        buffer = enqueue_buffer_read(tensor, context)
-        events = build_event_wait_list([buffer])
+        buffers = if tensor.is_a?(Array)
+                    tensor.map { |t|
+                      enqueue_buffer_read(t, context)
+                    }
+                  else
+                    [enqueue_buffer_read(tensor, context)]
+                  end
+
+        events = build_event_wait_list(buffers)
         # puts "** wait #{tensor.name} **"
         OpenCL.wait_for_events(events) unless events.empty?
         # puts "** done #{tensor.name} **"
-        buffer
+        tensor.is_a?(Array) ? buffers : buffers.first
       end
 
       def self.query_devices_with_score

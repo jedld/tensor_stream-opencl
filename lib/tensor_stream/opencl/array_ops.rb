@@ -10,7 +10,7 @@ module TensorStream
             shape = if %i[zeros_like ones_like].include?(tensor.operation)
                       inputs[0].shape
                     elsif !inputs[0].nil?
-                      read_final_result(complete_eval(inputs[0], context))
+                      complete_eval(inputs[0], context).buffer.to_a
                     else
                       tensor.shape.shape
                     end
@@ -365,8 +365,8 @@ module TensorStream
           end
 
           register_op :reshape do |context, tensor, inputs|
-            arr = inputs[0]
-            new_shape = read_final_result(complete_eval(inputs[1], context))
+            arr, new_shape = inputs
+            new_shape = complete_eval(new_shape, context).buffer.to_a
 
             shape = if new_shape.size.zero? && arr.buffer.size == 1
                       new_shape
@@ -440,6 +440,31 @@ module TensorStream
               buffer
             else
               a
+            end
+          end
+
+          register_op :range do |context, tensor, inputs|
+            start, limit, delta = complete_eval(inputs, context).map { |p| p.buffer.to_a.first }
+
+            raise " delta !=0 " if delta.zero?
+            raise " Requires start <= limit when delta > 0" if (start > limit) && delta > 0
+            raise " Requires start >= limit when delta < 0" if (start < limit) && delta < 0
+            cache_key = "range_#{start}_#{limit}_#{delta}_#{tensor.data_type}"
+
+            @context[:_cache][:_cl_buffers][cache_key] ||= begin
+              delta =  fp_type?(tensor.options[:output_type]) ? delta.to_f : delta.to_i
+              cur_step = fp_type?(tensor.options[:output_type]) ? start.to_f : start.to_i
+              r = []
+              Kernel.loop do
+                break if start == limit
+                break if (start < limit) && (cur_step >= limit)
+                break if (start > limit) && (cur_step <= limit)
+
+                r << cur_step
+                cur_step += delta
+              end
+              r
+              convert_to_opencl(r, [r.size], data_type: tensor.options[:output_type], name: tensor.name)
             end
           end
         end

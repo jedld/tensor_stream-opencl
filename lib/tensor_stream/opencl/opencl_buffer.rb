@@ -24,7 +24,7 @@ module TensorStream
     end
 
     def inspect
-      "CLBuffer(shape: #{shape || "?"} data_type: #{data_type}, cl_allocated: #{cl_buffer ? cl_buffer.size : 'unallocated'}) -> raw: #{buffer.to_a}"
+      "CLBuffer(name: #{name} shape: #{shape || "?"} data_type: #{data_type}, cl_allocated: #{cl_buffer ? cl_buffer.size : 'unallocated'}) -> raw: #{buffer.to_a}"
     end
 
     def to_ruby
