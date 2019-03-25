@@ -4,6 +4,25 @@ require 'benchmark'
 require 'pry-byebug'
 require 'awesome_print'
 require 'tensor_stream/opencl'
+require 'rbconfig'
+
+def os
+  @os ||= (
+    host_os = RbConfig::CONFIG['host_os']
+    case host_os
+    when /mswin|msys|mingw|cygwin|bccwin|wince|emc/
+      :windows
+    when /darwin|mac os/
+      :macosx
+    when /linux/
+      :linux
+    when /solaris|bsd/
+      :unix
+    else
+      raise Error::WebDriverError, "unknown os: #{host_os.inspect}"
+    end
+  )
+end
 
 def tr(t, places = 1)
   if t.is_a?(Array)
@@ -82,7 +101,11 @@ puts TensorStream::Evaluator.default_evaluators
 
 sess2 = tf.session
 
-puts `cat /proc/cpuinfo | grep "model name" | head -1`
+if os == :macosx
+  puts `sysctl -n machdep.cpu.brand_string`
+else
+  puts `cat /proc/cpuinfo | grep "model name" | head -1`
+end
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
