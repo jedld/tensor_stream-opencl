@@ -16,7 +16,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   describe "supported TensorStream version" do
     it "returns the version" do
-      expect(TensorStream.version).to eq("1.0.6")
+      expect(TensorStream.version).to eq("1.0.7")
     end
   end
 
