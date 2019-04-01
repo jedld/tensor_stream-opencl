@@ -389,9 +389,9 @@ module TensorStream
               res
             else
               rank = inputs[0].shape.size
-              perm = inputs[1].nil? ? (0...rank).to_a.reverse : inputs[1].buffer
+              perm = inputs[1].nil? ? (0...rank).to_a.reverse : inputs[1].buffer!(_opencl_queue)
               new_shape = perm.map { |p| inputs[0].shape[p] }.to_a
-              output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
+              output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name, allocate_host: true)
               transpose_with_perm(inputs[0].buffer, output_buffer.buffer, inputs[0].shape, new_shape, perm)
 
               write_op = _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)

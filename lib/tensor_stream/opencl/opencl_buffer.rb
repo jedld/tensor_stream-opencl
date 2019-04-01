@@ -27,6 +27,15 @@ module TensorStream
       "CLBuffer(name: #{name} shape: #{shape || "?"} data_type: #{data_type}, cl_allocated: #{cl_buffer ? cl_buffer.size : 'unallocated'}) -> raw: #{buffer.to_a}"
     end
 
+    def buffer!(cl_queue)
+      return buffer if buffer.is_a?(NArray)
+
+      @buffer = allocate_narray_for_type(buffer.data_type, buffer.size) if buffer.is_a?(LazyBuffer)
+
+      cl_queue.enqueue_read_buffer(cl_buffer, @buffer, blocking: true)
+      @buffer
+    end
+
     def to_ruby
       return [] if buffer.empty?
 

@@ -64,6 +64,45 @@ module TensorStream
 
         create_command_queue
       end
+      class LazyBuffer
+        attr_reader :data_type
+
+        def initialize(data_type, size)
+          @data_type = data_type
+          @size = size
+        end
+
+        def size
+          @size
+        end
+
+        def element_size
+          buffer_size_for_type(@data_type)
+        end
+
+        def buffer_size_for_type(data_type)
+          case data_type
+          when :float, :float32, :float16
+            4
+          when :float64
+            8
+          when :int, :int32, :int64, :uint64, :uint32 # NArray does not have 64 bit int types
+            4
+          when :int16, :uint16
+            2
+          when :uint8, :int8
+            1
+          when :boolean
+            1
+          when :string
+            1
+          when :unknown
+            nil
+          else
+            raise "unsupported type #{data_type}"
+          end
+        end
+      end
 
       class << self
         def query_supported_devices
@@ -158,6 +197,9 @@ module TensorStream
           return buffer if buffer.nil?
           return [] if buffer.buffer.nil?
           return buffer if buffer.buffer.size.zero?
+
+          # lazy allocate
+          buffer.buffer = allocate_narray_for_type(buffer.buffer.data_type, buffer.buffer.size) if buffer.buffer.is_a?(LazyBuffer)
 
           buffer.op = _opencl_queue.enqueue_read_buffer(buffer.cl_buffer, buffer.buffer, event_wait_list: build_event_wait_list([buffer]))
           buffer
@@ -848,16 +890,17 @@ module TensorStream
         end
       end
 
-      def _create_result_buffer(data_type, shape, name)
+      def _create_result_buffer(data_type, shape, name, allocate_host: false)
         return OpenCLBuffer.nil_buffer(self, name, data_type) if shape == [0]
 
         cache_key = "_result_#{name}_#{shape.join('_')}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           # puts "create result buffer #{cache_key}"
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
-          buffer =  allocate_narray_for_type(data_type, size)
-          cl_buffer = _opencl_context.create_buffer(buffer.size * buffer.element_size)
-          OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: buffer, cl_buffer: cl_buffer, name: name)
+          lazy_buffer = !allocate_host ? LazyBuffer.new(data_type, size) : allocate_narray_for_type(data_type, size)
+          cl_buffer = _opencl_context.create_buffer(size * lazy_buffer.element_size)
+
+          OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: lazy_buffer, cl_buffer: cl_buffer, name: name)
         end
       end
 
