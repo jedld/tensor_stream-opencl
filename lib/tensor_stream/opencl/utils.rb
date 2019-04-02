@@ -15,4 +15,13 @@ module TensorStream
       end
     end
   end
+  module CLEventHelpers
+    def build_event_wait_list(inputs)
+      if inputs.is_a?(Array)
+        inputs.flatten.compact.map(&:op).compact.uniq
+      else
+        inputs.op ? [inputs.op] : []
+      end
+    end
+  end
 end

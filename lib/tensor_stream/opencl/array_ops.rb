@@ -16,7 +16,7 @@ module TensorStream
                     end
             cache_key = "cons_#{tensor.name}_#{tensor.data_type}_#{shape}"
             @context[:_cache][:_cl_buffers][cache_key] ||= begin
-              buffer = allocate_narray_for_type(tensor.data_type, shape.reduce(:*) || 1)
+              buffer = OpenCLBuffer.allocate_narray_for_type(tensor.data_type, shape.reduce(:*) || 1)
               if %i[zeros zeros_like].include?(tensor.operation)
                 buffer.fill!(0)
               else
@@ -47,7 +47,7 @@ module TensorStream
             buffer = if cl_buffer
                        cl_buffer.buffer
                      else
-                       allocate_narray_for_type(tensor.data_type, narray_size)
+                       OpenCLBuffer.allocate_narray_for_type(tensor.data_type, narray_size)
                      end
 
             buffer.fill!(value.buffer[0])
@@ -389,7 +389,7 @@ module TensorStream
               res
             else
               rank = inputs[0].shape.size
-              perm = inputs[1].nil? ? (0...rank).to_a.reverse : inputs[1].buffer!(_opencl_queue)
+              perm = inputs[1].nil? ? (0...rank).to_a.reverse : inputs[1].buffer!
               new_shape = perm.map { |p| inputs[0].shape[p] }.to_a
               output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name, allocate_host: true)
               transpose_with_perm(inputs[0].buffer, output_buffer.buffer, inputs[0].shape, new_shape, perm)

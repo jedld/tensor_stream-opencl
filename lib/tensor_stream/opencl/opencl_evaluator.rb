@@ -49,6 +49,7 @@ module TensorStream
       include TensorStream::OpenCLHelpers::NNOps
       include TensorStream::OpenCLHelpers::ImagesOps
       include TensorStream::OpenCLHelpers::ArrayOps
+      include TensorStream::CLEventHelpers
 
       def initialize(session, device, thread_pool: nil, log_intermediates: false)
         super
@@ -63,45 +64,6 @@ module TensorStream
         @device_type = @opencl_device.type.to_s.downcase
 
         create_command_queue
-      end
-      class LazyBuffer
-        attr_reader :data_type
-
-        def initialize(data_type, size)
-          @data_type = data_type
-          @size = size
-        end
-
-        def size
-          @size
-        end
-
-        def element_size
-          buffer_size_for_type(@data_type)
-        end
-
-        def buffer_size_for_type(data_type)
-          case data_type
-          when :float, :float32, :float16
-            4
-          when :float64
-            8
-          when :int, :int32, :int64, :uint64, :uint32 # NArray does not have 64 bit int types
-            4
-          when :int16, :uint16
-            2
-          when :uint8, :int8
-            1
-          when :boolean
-            1
-          when :string
-            1
-          when :unknown
-            nil
-          else
-            raise "unsupported type #{data_type}"
-          end
-        end
       end
 
       class << self
@@ -199,7 +161,7 @@ module TensorStream
           return buffer if buffer.buffer.size.zero?
 
           # lazy allocate
-          buffer.buffer = allocate_narray_for_type(buffer.buffer.data_type, buffer.buffer.size) if buffer.buffer.is_a?(LazyBuffer)
+          buffer.buffer = OpenCLBuffer.allocate_narray_for_type(buffer.buffer.data_type, buffer.buffer.size) if buffer.buffer.is_a?(OpenCLBuffer::LazyBuffer)
 
           buffer.op = _opencl_queue.enqueue_read_buffer(buffer.cl_buffer, buffer.buffer, event_wait_list: build_event_wait_list([buffer]))
           buffer
@@ -404,9 +366,13 @@ module TensorStream
 
       register_op :identity do |_context, tensor, inputs|
         value = inputs[0]
-        buffer = OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type, shape: value.shape, buffer: value.buffer, cl_buffer: value.cl_buffer)
-        buffer.op = build_event_wait_list(inputs)
-        buffer
+        if value.is_a?(OutputGroup)
+          value
+        else
+          buffer = OpenCLBuffer.new(self, name: tensor.name, data_type: tensor.data_type, shape: value.shape, buffer: value.buffer, cl_buffer: value.cl_buffer)
+          buffer.op = build_event_wait_list(inputs)
+          buffer
+        end
       end
 
       register_op :assign, noop: true do |context, tensor, inputs|
@@ -822,9 +788,9 @@ module TensorStream
                                  value
                                elsif data_type == :string && shape.empty?
                                  cl_buffer_size = value[0].bytesize
-                                 allocate_narray_for_type(data_type, value[0].bytesize)
+                                 OpenCLBuffer.allocate_narray_for_type(data_type, value[0].bytesize)
                                else
-                                 allocate_narray_for_type(data_type, narray_size)
+                                OpenCLBuffer.allocate_narray_for_type(data_type, narray_size)
                                end
 
                       return nil if buffer.nil?
@@ -867,29 +833,6 @@ module TensorStream
         cl_object
       end
 
-      def allocate_narray_for_type(data_type, narray_size)
-        case data_type
-        when :float, :float32, :float16
-          NArray.sfloat(narray_size)
-        when :float64
-          NArray.float(narray_size)
-        when :int, :int32, :int64, :uint64, :uint32 # NArray does not have 64 bit int types
-          NArray.int(narray_size)
-        when :int16, :uint16
-          NArray.sint(narray_size)
-        when :uint8, :int8
-          NArray.byte(narray_size)
-        when :boolean
-          NArray.byte(narray_size)
-        when :string
-          NArray.byte(narray_size)
-        when :unknown
-          nil
-        else
-          raise "unsupported type #{data_type}"
-        end
-      end
-
       def _create_result_buffer(data_type, shape, name, allocate_host: false)
         return OpenCLBuffer.nil_buffer(self, name, data_type) if shape == [0]
 
@@ -897,7 +840,7 @@ module TensorStream
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           # puts "create result buffer #{cache_key}"
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
-          lazy_buffer = !allocate_host ? LazyBuffer.new(data_type, size) : allocate_narray_for_type(data_type, size)
+          lazy_buffer = !allocate_host ? OpenCLBuffer::LazyBuffer.new(data_type, size) : OpenCLBuffer.allocate_narray_for_type(data_type, size)
           cl_buffer = _opencl_context.create_buffer(size * lazy_buffer.element_size)
 
           OpenCLBuffer.new(self, data_type: data_type, shape: shape, buffer: lazy_buffer, cl_buffer: cl_buffer, name: name)
@@ -909,7 +852,7 @@ module TensorStream
         cache_key ="_sub_result_#{parent_buffer.object_id}_#{name}_#{index}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
-          buffer = allocate_narray_for_type(data_type, size)
+          buffer = OpenCLBuffer.allocate_narray_for_type(data_type, size)
 
           if parent_buffer.cl_buffer.associated_memobject.nil?
             start = index * buffer.size * buffer.element_size
@@ -940,7 +883,7 @@ module TensorStream
         cache_key = "_sub_result_#{parent_buffer.object_id}_#{name}_#{index}:#{object_id}"
         @context[:_cache][:_cl_buffers][cache_key] ||= begin
           size = shape.empty? || shape == [0] ? 1 : shape.reduce(:*)
-          buffer = allocate_narray_for_type(data_type, size)
+          buffer = OpenCLBuffer.allocate_narray_for_type(data_type, size)
 
           if parent_buffer.cl_buffer.associated_memobject.nil?
             region = OpenCL::BufferRegion::new(start, region_size_in_bytes)
@@ -1028,14 +971,6 @@ module TensorStream
 
       def _rank_from_shape(shape)
         shape.is_a?(Array) ? shape.size : 0
-      end
-
-      def build_event_wait_list(inputs)
-        if inputs.is_a?(Array)
-          inputs.flatten.compact.map(&:op).compact.uniq
-        else
-          inputs.op ? [inputs.op] : []
-        end
       end
 
       def resolve_placeholder(placeholder, _execution_context = {})
