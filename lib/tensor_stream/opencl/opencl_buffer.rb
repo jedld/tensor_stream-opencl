@@ -32,7 +32,7 @@ module TensorStream
 
       @buffer = allocate_narray_for_type(buffer.data_type, buffer.size) if buffer.is_a?(LazyBuffer)
 
-      cl_queue.enqueue_read_buffer(cl_buffer, @buffer, blocking: true)
+      cl_queue.enqueue_read_buffer(cl_buffer, @buffer, blocking: true, event_wait_list: build_event_wait_list([self]))
       @buffer
     end
 
