@@ -24,7 +24,7 @@ module TensorStream
               end
             end
 
-            output_buffer = _create_result_buffer(tensor.data_type, [image.height, image.width, channels], "out_#{tensor.name}")
+            output_buffer = _create_result_buffer(tensor.data_type, [image.height, image.width, channels], "out_#{tensor.name}", allocate_host: true)
 
             image.grayscale! if channels == 1
             image.pixels.each_with_index do |pixel, index|

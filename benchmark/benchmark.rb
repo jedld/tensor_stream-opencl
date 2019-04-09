@@ -4,6 +4,25 @@ require 'benchmark'
 require 'pry-byebug'
 require 'awesome_print'
 require 'tensor_stream/opencl'
+require 'rbconfig'
+
+def os
+  @os ||= (
+    host_os = RbConfig::CONFIG['host_os']
+    case host_os
+    when /mswin|msys|mingw|cygwin|bccwin|wince|emc/
+      :windows
+    when /darwin|mac os/
+      :macosx
+    when /linux/
+      :linux
+    when /solaris|bsd/
+      :unix
+    else
+      raise Error::WebDriverError, "unknown os: #{host_os.inspect}"
+    end
+  )
+end
 
 def tr(t, places = 1)
   if t.is_a?(Array)
@@ -77,12 +96,17 @@ conv2d_grad = tf.gradients(conv2d, [sample_image, sample_filter])
 
 bias_add = tf.nn.bias_add(large_tensor, large_tensor_bias)
 bias_add_grad = tf.gradients(bias_add, [large_tensor_bias])
+dropout = tf.nn.dropout(large_tensor, 0.8)
 
 puts TensorStream::Evaluator.default_evaluators
 
 sess2 = tf.session
 
-puts `cat /proc/cpuinfo | grep "model name" | head -1`
+if os == :macosx
+  puts `sysctl -n machdep.cpu.brand_string`
+else
+  puts `cat /proc/cpuinfo | grep "model name" | head -1`
+end
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
 puts "OpenCL device #{device.platform.to_s} #{device.name}"
 Benchmark.bmbm do |x|
@@ -122,4 +146,6 @@ Benchmark.bmbm do |x|
   x.report("opencl pow float       :") { 100.times do sess2.run(pow_f, feed_dict: { p => rand, q => rand }) end }
   x.report("ruby pow int           :") { 100.times do sess.run(pow_i, feed_dict: { p => rand, q => rand }) end }
   x.report("opencl pow int         :") { 100.times do sess2.run(pow_i, feed_dict: { p => rand, q => rand }) end }
+  x.report("ruby dropout           :") { 100.times do sess.run(dropout) end }
+  x.report("opencl dropout         :") { 100.times do sess2.run(dropout) end }
 end

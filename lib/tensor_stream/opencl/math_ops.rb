@@ -54,26 +54,28 @@ module TensorStream
           register_op :mat_mul do |_context, tensor, inputs|
             a, b = inputs
 
-            m = a.shape[0]
-            n = b.shape[1]
-            v = b.shape[0]
-            k = a.shape[1]
+            a_matrix_shape = a.shape.dup
+            b_matrix_shape = b.shape.dup
+
+            k = a_matrix_shape.pop
+            m = a_matrix_shape.pop
+            n = b_matrix_shape.pop
+            v = b_matrix_shape.pop
 
             if tensor.options[:transpose_a]
-              m = a.shape[1]
-              k = a.shape[0]
+              m, k = k, m
             end
 
             if tensor.options[:transpose_b]
-              n = b.shape[0]
-              v = b.shape[1]
+              n, v = v, n
             end
 
-            result_shape = [m, n]
+            result_shape = [a_matrix_shape.first, m, n].compact
+            work_group = [a_matrix_shape.first || 1, m, n]
 
             raise "#{tensor.inputs[0].name} rank must be greater than 1" if a.shape.size < 2
             raise "#{tensor.inputs[1].name} rank must be greater than 1" if b.shape.size < 2
-            raise "#{tensor.inputs[0].name} unsupported rank" if b.shape.size != 2 || a.shape.size!=2
+            raise "#{tensor.inputs[0].name} unsupported rank" if b.shape.size > 3 || a.shape.size > 3
             raise "incompatible shape sizes for matrix multiplication (#{a.shape[1]} != #{b.shape[0]}) #{a.shape} vs #{b.shape}" if k != v
 
             dtype = tensor.data_type
@@ -85,7 +87,7 @@ module TensorStream
             cl_k = OpenCL::Int1.new(k)
 
             event_wait_list = build_event_wait_list([a, b])
-            output_buffer.op = _cl_program('gemm', ta: !!tensor.options[:transpose_a], tb: !!tensor.options[:transpose_b], dtype: dtype).send(:"gemm_#{dtype}", _opencl_queue, result_shape, cl_m, cl_n, cl_k, a.cl_buffer, b.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.op = _cl_program('gemm', ta: !!tensor.options[:transpose_a], tb: !!tensor.options[:transpose_b], n: m * n, n_a: m * k, n_b: n * v, dtype: dtype).send(:"gemm_#{dtype}", _opencl_queue, work_group, cl_m, cl_n, cl_k, a.cl_buffer, b.cl_buffer, output_buffer.cl_buffer, event_wait_list: event_wait_list)
 
             output_buffer
           end

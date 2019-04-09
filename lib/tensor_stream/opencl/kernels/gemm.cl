@@ -6,8 +6,9 @@ __kernel void gemm_<%= dtype %>(const int M, const int N, const int K,
                       __global <%= c_dtype %>* C) {
 
     // Get the index of the current element to be processed
-    const int globalRow = get_global_id(0); // Row ID of C (0..M)
-    const int globalCol = get_global_id(1); // Col ID of C (0..N)
+    const int index = get_global_id(0);
+    const int globalRow = get_global_id(1); // Row ID of C (0..M)
+    const int globalCol = get_global_id(2); // Col ID of C (0..N)
 
     // Compute a single element (loop over K)
     <%= c_dtype %> acc = 0.0f;
@@ -16,9 +17,9 @@ __kernel void gemm_<%= dtype %>(const int M, const int N, const int K,
         int b_index = k*N + globalCol;
 <% if ta %>a_index = M*k + globalRow;<% end %>
 <% if tb %>b_index = globalCol*K + k;<% end %>
-        acc += A[a_index] * B[b_index];
+        acc += A[a_index + index * <%= n_a %>] * B[b_index + index * <%= n_b %>];
     }
 
     // Store the result
-    C[globalRow*N + globalCol] = acc;
+    C[index * <%= n %> + globalRow*N + globalCol] = acc;
 }
