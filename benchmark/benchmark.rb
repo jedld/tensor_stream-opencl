@@ -134,18 +134,18 @@ tests = {
 }
 
 stats = {
-  ruby: {},
-  opencl: {},
+  "ruby" => {},
+  "opencl" => {},
 }
 
 puts "rehersal"
 tests.each do |k, v|
   if v.is_a?(Proc)
-      r = Benchmark.measure("ruby #{k}") { 10.times do v.call(sess) end }
-      r =Benchmark.measure("opencl #{k}") { 10.times do v.call(sess2) end }
+    r = Benchmark.measure("ruby #{k}") { 10.times do v.call(sess) end }
+    r = Benchmark.measure("opencl #{k}") { 10.times do v.call(sess2) end }
   else
-      r = Benchmark.measure("ruby #{k}") { 10.times do sess.run(v) end }
-      r = Benchmark.measure("opencl #{k}") { 10.times do sess2.run(v)  end }
+    r = Benchmark.measure("ruby #{k}") { 10.times do sess.run(v) end }
+    r = Benchmark.measure("opencl #{k}") { 10.times do sess2.run(v)  end }
   end
 end
 
@@ -154,19 +154,19 @@ puts "writing benchmark"
 tests.each do |k, v|
   if v.is_a?(Proc)
     r = Benchmark.measure(k) { 100.times do v.call(sess) end }
-    stats[:ruby][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+    stats["ruby"][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
     r = Benchmark.measure(k) { 100.times do v.call(sess2) end }
-    stats[:opencl][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+    stats["opencl"][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
   else
     r = Benchmark.measure(k) { 100.times do sess.run(v) end }
-    stats[:ruby][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+    stats["ruby"][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
     r = Benchmark.measure(k) { 100.times do sess2.run(v)  end }
-    stats[:opencl][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+    stats["opencl"][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
   end
 end
 
 output = {
   "#{cpu.strip.gsub("model name\t: ", "")} #{cl_device.strip}" => stats
 }
-
-File.write("benchmark_#{Time.now.strftime('%Y%m%d%H%M')}.json", output.to_json)
+current_benchmark = JSON.parse(File.read('benchmark.json'))
+File.write("benchmark_#{Time.now.strftime('%Y%m%d%H%M')}.json", JSON.pretty_generate(current_benchmark.merge(output)))
