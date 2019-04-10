@@ -102,50 +102,71 @@ puts TensorStream::Evaluator.default_evaluators
 
 sess2 = tf.session
 
-if os == :macosx
-  puts `sysctl -n machdep.cpu.brand_string`
-else
-  puts `cat /proc/cpuinfo | grep "model name" | head -1`
-end
+cpu = if os == :macosx
+          `sysctl -n machdep.cpu.brand_string`
+      else
+        `cat /proc/cpuinfo | grep "model name" | head -1`
+      end
+
 device = TensorStream::Evaluator::OpenclEvaluator.default_device.native_device
-puts "OpenCL device #{device.platform.to_s} #{device.name}"
-Benchmark.bmbm do |x|
-  x.report("ruby argmin            :") { 100.times do sess.run(argmin) end }
-  x.report("opencl argmin          :") { 100.times do sess2.run(argmin) end }
-  x.report("ruby bias_add_grad     :") { 100.times do sess.run(bias_add_grad) end }
-  x.report("opencl bias_add_grad   :") { 100.times do sess2.run(bias_add_grad) end }
-  x.report("ruby bias_add          :") { 100.times do sess.run(bias_add) end }
-  x.report("opencl bias_add        :") { 100.times do sess2.run(bias_add) end }
-  x.report("ruby conv2d_backprop   :") { 100.times do sess.run(conv2d_grad) end }
-  x.report("opencl conv2d_backprop :") { 100.times do sess2.run(conv2d_grad) end }
-  x.report("ruby conv2d            :") { 100.times do sess.run(conv2d) end }
-  x.report("opencl conv2d          :") { 100.times do sess2.run(conv2d) end }
-  x.report("ruby arr index         :") { 100.times do sess.run(index) end }
-  x.report("opencl arr index       :") { 100.times do sess2.run(index) end }
-  x.report("ruby min               :") { 100.times do sess.run(min) end }
-  x.report("opencl min             :") { 100.times do sess2.run(min) end }
-  x.report("ruby sum               :") { 100.times do sess.run(sum) end }
-  x.report("opencl sum             :") { 100.times do sess2.run(sum) end }
-  x.report("ruby sum axis 1        :") { 100.times do sess.run(sum_axis_1) end }
-  x.report("opencl sum axis 1      :") { 100.times do sess2.run(sum_axis_1) end }
-  x.report("ruby split             :") { 100.times do sess.run(split) end }
-  x.report("opencl split           :") { 100.times do sess2.run(split) end }
-  x.report("ruby add_n             :") { 100.times do sess.run(add_n) end }
-  x.report("opencl add_n           :") { 100.times do sess2.run(add_n) end }
-  x.report("ruby ooo matmul        :") { 100.times do sess.run(out_of_order) end }
-  x.report("opencl    ooo matmul   :") { 100.times do sess2.run(out_of_order) end }
-  x.report("ruby softmax           :") { 100.times do sess.run(softmax) end }
-  x.report("opencl    softmax      :") { 100.times do sess2.run(softmax) end }
-  x.report("ruby matmul            :") { 100.times do sess.run(matmul) end }
-  x.report("opencl    matmul       :") { 100.times do sess2.run(matmul) end }
-  x.report("ruby                   :") { 100.times do sess.run(model, feed_dict: { p => rand, q => rand }) end }
-  x.report("opencl                 :") { 100.times do sess2.run(model, feed_dict: { p => rand, q => rand }) end }
-  x.report("ruby single function   :") { 100.times do sess.run(single_function_test, feed_dict: { p => rand, q => rand }) end }
-  x.report("opencl single function :") { 100.times do sess2.run(single_function_test, feed_dict: { p => rand, q => rand }) end }
-  x.report("ruby pow float         :") { 100.times do sess.run(pow_f, feed_dict: { p => rand, q => rand }) end }
-  x.report("opencl pow float       :") { 100.times do sess2.run(pow_f, feed_dict: { p => rand, q => rand }) end }
-  x.report("ruby pow int           :") { 100.times do sess.run(pow_i, feed_dict: { p => rand, q => rand }) end }
-  x.report("opencl pow int         :") { 100.times do sess2.run(pow_i, feed_dict: { p => rand, q => rand }) end }
-  x.report("ruby dropout           :") { 100.times do sess.run(dropout) end }
-  x.report("opencl dropout         :") { 100.times do sess2.run(dropout) end }
+cl_device =  "#{device.platform.to_s} #{device.name}"
+
+tests = {
+  "argmin" => argmin,
+  "bias_add_grad" => bias_add_grad,
+  "bias_add" => bias_add,
+  "conv2d_backprop" => conv2d_grad,
+  "conv2d" => conv2d,
+  "index" =>index,
+  "min" => min,
+  "sum" => sum,
+  "sum axis 1" => sum_axis_1,
+  "split" => split,
+  "add_n" => add_n,
+  "out of order matmul" => out_of_order,
+  "softmax" => softmax,
+  "matmul" => matmul,
+  "test model" => ->(sess) { sess.run(model, feed_dict: { p => rand, q => rand }) },
+  "single function test" => ->(sess) { sess.run(single_function_test, feed_dict: { p => rand, q => rand }) },
+  "pow (float)" => ->(sess) { sess.run(pow_f, feed_dict: { p => rand, q => rand }) },
+  "pow (int)" => ->(sess) { sess.run(pow_i, feed_dict: { p => rand, q => rand }) },
+  "dropout" => dropout
+}
+
+stats = {
+  ruby: {},
+  opencl: {},
+}
+
+puts "rehersal"
+tests.each do |k, v|
+  if v.is_a?(Proc)
+      r = Benchmark.measure("ruby #{k}") { 10.times do v.call(sess) end }
+      r =Benchmark.measure("opencl #{k}") { 10.times do v.call(sess2) end }
+  else
+      r = Benchmark.measure("ruby #{k}") { 10.times do sess.run(v) end }
+      r = Benchmark.measure("opencl #{k}") { 10.times do sess2.run(v)  end }
+  end
 end
+
+puts "writing benchmark"
+
+tests.each do |k, v|
+  if v.is_a?(Proc)
+    r = Benchmark.measure(k) { 100.times do v.call(sess) end }
+    stats[:ruby][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+    r = Benchmark.measure(k) { 100.times do v.call(sess2) end }
+    stats[:opencl][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+  else
+    r = Benchmark.measure(k) { 100.times do sess.run(v) end }
+    stats[:ruby][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+    r = Benchmark.measure(k) { 100.times do sess2.run(v)  end }
+    stats[:opencl][r.label] = { real: r.real, stime: r.stime, total: r.total, utime: r.utime }
+  end
+end
+
+output = {
+  "#{cpu.strip.gsub("model name\t: ", "")} #{cl_device.strip}" => stats
+}
+
+File.write("benchmark_#{Time.now.strftime('%Y%m%d%H%M')}.json", output.to_json)
