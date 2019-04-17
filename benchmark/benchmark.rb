@@ -166,7 +166,7 @@ tests.each do |k, v|
 end
 
 output = {
-  "#{cpu.strip.gsub("model name\t: ", "")} #{cl_device.strip}" => stats
+  "#{RUBY_ENGINE }-#{RUBY_VERSION}/#{os}/#{cpu.strip.gsub("model name\t: ", "")}/#{cl_device.strip}" => stats
 }
 current_benchmark = JSON.parse(File.read('benchmark.json'))
 File.write("benchmark_#{Time.now.strftime('%Y%m%d%H%M')}.json", JSON.pretty_generate(current_benchmark.merge(output)))
