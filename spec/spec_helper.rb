@@ -1,5 +1,7 @@
 require "bundler/setup"
+require "tensor_stream"
 require "tensor_stream/opencl"
+require "tensor_stream/utils/tensor_utils"
 require "pry-byebug"
 require 'simplecov'
 SimpleCov.start

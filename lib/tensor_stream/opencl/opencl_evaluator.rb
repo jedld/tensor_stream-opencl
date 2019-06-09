@@ -622,15 +622,15 @@ module TensorStream
 
         if assign.container_buffer
           event_wait_list = build_event_wait_list([buffer, assign.container_buffer])
-          assign.container_buffer.op = if assign.container_buffer.cl_buffer != buffer.cl_buffer
-                                         _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
-                                       else
-                                         buffer.op
-                                       end
         else
-          value = read_final_result(buffer)
-          assign.options[:container].buffer = convert_to_opencl(value, buffer.shape, data_type: tensor.data_type, name: assign.name)
-          assign.options[:container].value = value
+          var_buffer = _create_result_buffer(buffer.data_type, buffer.shape, tensor.name)
+          assign.options[:container].buffer = var_buffer
+        end
+
+        assign.container_buffer.op = if assign.container_buffer.cl_buffer != buffer.cl_buffer
+          _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
+        else
+          buffer.op
         end
 
         assign.container_buffer.dirty = true
@@ -797,7 +797,7 @@ module TensorStream
 
                       return nil if buffer.nil?
 
-                      cl_buffer = unless value.flatten.empty?
+                      cl_buffer = unless array_fast_empty?(value)
                                     cl_buffer_size = 1 if cl_buffer_size.zero?
                                     _opencl_context.create_buffer(cl_buffer_size * buffer.element_size)
                                   end
@@ -810,14 +810,18 @@ module TensorStream
             cl_object.buffer[index] = c
           end
         elsif value.is_a?(Array)
-          value.flatten.each_with_index do |element, index|
-            cl_object.buffer[index] = if element.is_a?(Tensor)
+          cast_value = value.flatten.each_with_index.map do |element, index|
+           if element.is_a?(Tensor)
                                         read_final_result(complete_eval(element, {}))
                                       elsif data_type == :boolean
                                         element ? 1 : 0
                                       else
                                         Tensor.cast_dtype(element, data_type)
                                       end
+          end
+
+          cast_value.each_with_index do |v, index|
+            cl_object.buffer[index] = v
           end
         elsif value.is_a?(NArray)
           cl_object.buffer = value
@@ -997,6 +1001,23 @@ module TensorStream
         end
 
         arr != 0
+      end
+
+      ##
+      # Fast way to determine if array is "empty" by including nested elements
+      def array_fast_empty?(arr)
+        return true if arr.size.zero?
+
+        arr.each do |a|
+          if a.is_a?(Array)
+            return false if !array_fast_empty?(a)
+
+            next
+          end
+          return false
+        end
+
+        true
       end
     end
   end
