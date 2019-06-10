@@ -110,6 +110,18 @@ module TensorStream
       data_type == :boolean ? process_function_op(result) { |a, _b|  a != 0 } : result
     end
 
+    def sync!
+      buffer! if buffer.is_a?(LazyBuffer)
+
+      if dirty
+        read_event = command_queue.enqueue_read_buffer(cl_buffer, buffer, event_wait_list: [op].compact)
+        OpenCL.wait_for_events([read_event])
+        self.dirty = false
+      end
+
+      self
+    end
+
     def self.nil_buffer(owner, name, data_type)
       OpenCLBuffer.new(owner, name: name, data_type: data_type, shape: [0], buffer: nil, cl_buffer: nil)
     end

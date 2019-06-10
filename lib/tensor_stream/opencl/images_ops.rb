@@ -11,7 +11,7 @@ module TensorStream
             resample_method = tensor.options[:resample_method] || :bilinear
             channels = 4 if channels.zero?
 
-            image = ChunkyPNG::Image.from_blob(content.buffer.to_a.pack('C*'))
+            image = ChunkyPNG::Image.from_blob(content.sync!.buffer.to_a.pack('C*'))
 
             if resample_new_shape
               case resample_method
@@ -40,6 +40,38 @@ module TensorStream
                 output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.b(pixel)
               elsif channels == 1
                 output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
+              else
+                raise "Invalid channel value #{channels}"
+              end
+            end
+
+            write_op = _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
+            output_buffer.op = write_op
+            output_buffer
+          end
+
+          register_op :decode_jpg do |context, tensor, inputs|
+            require 'jpeg'
+
+            content = _run(inputs[0], context)
+            channels = tensor.options[:channels]
+            resample_new_shape = tensor.options[:new_shape]
+            resample_method = tensor.options[:resample_method] || :bilinear
+            channels = 3 if channels.zero?
+            jpeg_buffer = content.sync!.buffer.to_a.pack('C*')
+
+            image = Jpeg::Image.open_buffer(jpeg_buffer)
+
+            output_buffer = _create_result_buffer(tensor.data_type, [image.height, image.width, channels], "out_#{tensor.name}", allocate_host: true)
+
+            image.raw_data.each_with_index do |pixel, index|
+              start_index = index * channels
+              if channels == 3
+                output_buffer.buffer[start_index] = pixel[0]
+                output_buffer.buffer[start_index + 1] = pixel[1]
+                output_buffer.buffer[start_index + 2] = pixel[2]
+              elsif channels == 1
+                output_buffer.buffer[start_index] = pixel
               else
                 raise "Invalid channel value #{channels}"
               end
