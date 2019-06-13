@@ -472,6 +472,30 @@ module TensorStream
               convert_to_opencl(r, [r.size], data_type: tensor.options[:output_type], name: tensor.name)
             end
           end
+
+          register_op :gather do |context, tensor, inputs|
+            params, indexes = inputs
+            raise TensorStream::ValueError, "axis !=0 not supported" if tensor.options[:axis] != 0
+
+            new_shape = [indexes.buffer.size]
+            target_shape = params.shape.dup
+            target_shape.shift
+            new_shape += target_shape
+
+            target_shape_size = target_shape.empty? ? 1 : target_shape.reduce(:*)
+
+            output_buffer = _create_result_buffer(tensor.data_type, new_shape, tensor.name)
+            event_wait_list = build_event_wait_list(inputs)
+
+            output_buffer.op = indexes.buffer.to_a.map.with_index do |target_index, index|
+              source_ptr = target_index * target_shape_size * params.buffer.element_size
+              dest_ptr = index * target_shape_size * params.buffer.element_size
+              region = [target_shape_size * params.buffer.element_size, 1, 1]
+              raise TensorStream::ValueError, "Index out of bounds #{target_index} >= #{params.shape.reduce(:*)}" if target_index >= params.shape.first
+              _opencl_queue.enqueue_copy_buffer_rect(params.cl_buffer, output_buffer.cl_buffer, region, src_origin: [source_ptr, 0, 0], dst_origin: [dest_ptr, 0, 0], event_wait_list: event_wait_list) rescue binding.pry
+            end
+            output_buffer
+          end
         end
       end
     end
