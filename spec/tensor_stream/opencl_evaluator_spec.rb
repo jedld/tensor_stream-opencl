@@ -64,7 +64,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
 
   context "supported ops" do
     specify do
-      expect(described_class.ops.keys.size).to eq(111)
+      expect(described_class.ops.keys.size).to eq(112)
     end
 
     specify do
@@ -113,6 +113,7 @@ RSpec.describe TensorStream::Evaluator::OpenclEvaluator do
         floor_div
         floor_mod
         flow_group
+        gather
         greater
         greater_equal
         identity
