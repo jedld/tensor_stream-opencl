@@ -398,6 +398,7 @@ module TensorStream
 
         if assign.container_buffer.nil?
           value = assign.container
+
           raise "Variable #{tensor.name} not initialized!" if value.nil?
 
           assign.options[:container].buffer = convert_to_opencl(value, shape_eval(value), data_type: tensor.data_type, name: assign.name)
@@ -825,7 +826,6 @@ module TensorStream
 
           cast_value.each_with_index do |v, index|
             cl_object.buffer[index] = v
-          end rescue binding.pry
         elsif value.is_a?(NArray)
           cl_object.buffer = value
         elsif data_type == :boolean

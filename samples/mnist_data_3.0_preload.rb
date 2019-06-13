@@ -81,17 +81,16 @@ labels = mnist.train.labels
 test_images = mnist.test.images
 test_labels = mnist.test.labels
 
-all_train_images = tf.constant(images, name: 'train_images')
-all_train_labels = tf.constant(labels, name: 'train_labels')
-all_test_images = tf.constant(test_images, name: 'test_images')
-all_test_labels = tf.constant(test_labels, name: 'test_labels')
-
+all_train_images = tf.variable(images, name: 'train_images', trainable: false)
+all_train_labels = tf.variable(labels, name: 'train_labels', trainable: false)
+all_test_images = tf.variable(test_images, name: 'test_images', trainable: false)
+all_test_labels = tf.variable(test_labels, name: 'test_labels', trainable: false)
 
 # The model
 stride = 1  # output is 28x28
 
-train_x = tf.gather(tf.cast(all_train_images, :float32), selection)
-train_y = tf.gather(tf.cast(all_train_labels, :float32), selection)
+train_x = tf.cast(tf.gather(all_train_images, selection), :float32)
+train_y = tf.cast(tf.gather(all_train_labels, selection), :float32)
 
 test_x = tf.cast(all_train_images, :float32)
 test_y = tf.cast(all_train_labels, :float32)
@@ -137,7 +136,7 @@ init = tf.global_variables_initializer
 sess.run(init)
 
 #Setup save and restore
-model_save_path = "test_models/mnist_data_3.0"
+model_save_path = "test_models/mnist_data_3.0_preload"
 saver = tf::Train::Saver.new
 saver.restore(sess, model_save_path)
 
@@ -168,7 +167,7 @@ selections = (0...60_000).to_a
     puts("#{i}: ******** test accuracy: #{a_test} test loss: #{c_test}")
 
     # save current state of the model
-    save_path = saver.save(sess, model_save_path)
+    # save_path = saver.save(sess, model_save_path)
   end
 end
 
