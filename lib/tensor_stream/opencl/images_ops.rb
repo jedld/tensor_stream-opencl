@@ -27,24 +27,29 @@ module TensorStream
             output_buffer = _create_result_buffer(tensor.data_type, [image.height, image.width, channels], "out_#{tensor.name}", allocate_host: true)
 
             image.grayscale! if channels == 1
-            image.pixels.each_with_index do |pixel, index|
+            image_data = image.pixels.each_with_index.map do |pixel, index|
               start_index = index * channels
               if channels == 4
-                output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
-                output_buffer.buffer[start_index + 1] = ChunkyPNG::Color.g(pixel)
-                output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.b(pixel)
-                output_buffer.buffer[start_index + 3] = ChunkyPNG::Color.a(pixel)
+                [
+                 ChunkyPNG::Color.r(pixel),
+                 ChunkyPNG::Color.g(pixel),
+                 ChunkyPNG::Color.b(pixel),
+                 ChunkyPNG::Color.a(pixel)
+                ]
               elsif channels == 3
-                output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
-                output_buffer.buffer[start_index + 1] = ChunkyPNG::Color.g(pixel)
-                output_buffer.buffer[start_index + 2] = ChunkyPNG::Color.b(pixel)
+                [
+                  ChunkyPNG::Color.r(pixel),
+                  ChunkyPNG::Color.g(pixel),
+                  ChunkyPNG::Color.b(pixel)
+                ]
               elsif channels == 1
-                output_buffer.buffer[start_index] = ChunkyPNG::Color.r(pixel)
+                ChunkyPNG::Color.r(pixel)
               else
                 raise "Invalid channel value #{channels}"
               end
-            end
+            end.flatten
 
+            output_buffer.buffer = NArray.to_na(image_data)
             write_op = _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
             output_buffer.op = write_op
             output_buffer
@@ -62,21 +67,25 @@ module TensorStream
 
             image = Jpeg::Image.open_buffer(jpeg_buffer)
 
-            output_buffer = _create_result_buffer(tensor.data_type, [image.height, image.width, channels], "out_#{tensor.name}", allocate_host: true)
+            source_channels = image.color_info == :gray ? 1 : 3
+            output_buffer = _create_result_buffer(tensor.data_type, [image.height, image.width, channels], "out_#{tensor.name}", allocate_host: false)
 
-            image.raw_data.each_with_index do |pixel, index|
-              start_index = index * channels
-              if channels == 3
-                output_buffer.buffer[start_index] = pixel[0]
-                output_buffer.buffer[start_index + 1] = pixel[1]
-                output_buffer.buffer[start_index + 2] = pixel[2]
-              elsif channels == 1
-                output_buffer.buffer[start_index] = pixel
-              else
-                raise "Invalid channel value #{channels}"
+
+            image_data = image.raw_data.map do |pixel|
+              if source_channels == channels
+                pixel
+              elsif source_channels = 1 && channels == 3
+                [pixel, pixel, pixel]
+              elsif source_channels = 3 && channels == 1
+                raise TensorStream::ValueError, "color to grayscale not supported for jpg"
               end
-            end
+            end.flatten
 
+            raise TensorStream::ValueError, "float output not supported for jpg decode" if fp_type?(tensor.data_type)
+
+            output_buffer.buffer = NArray.to_na(image_data)
+
+            raise TensorStream::ValueError, "image size mismatch #{output_buffer.shape.reduce(:*)} != #{output_buffer.buffer.size}" if output_buffer.buffer.size != output_buffer.shape.reduce(:*)
             write_op = _opencl_queue.enqueue_write_buffer(output_buffer.cl_buffer, output_buffer.buffer)
             output_buffer.op = write_op
             output_buffer

@@ -345,8 +345,10 @@ module TensorStream
                 perform_transition(tensor, tensor, @context[:_cache][:placement][tensor.name][1], execution_context)
               elsif tensor.is_a?(Operation)
                 eval_operation(tensor, child_context)
+              elsif tensor.is_a?(Variable)
+                eval_operation(tensor.op, child_context)
               else
-                raise "invalid tensor type!"
+                raise "invalid tensor type! #{tensor.class}"
               end
 
         execution_context.deep_merge!(returns: child_context[:returns])
@@ -510,7 +512,8 @@ module TensorStream
       end
 
       register_op :const do |_context, tensor, inputs|
-        wrap_opencl(tensor.const_value, name: tensor.name, data_type: tensor.data_type)
+        cache_key = "const_#{tensor.graph.object_id}_opencl_#{tensor.name}:#{object_id}"
+        @context[:_cache][cache_key] ||= wrap_opencl(tensor.const_value, name: tensor.name, data_type: tensor.data_type)
       end
 
       register_op :size do |_context, tensor, inputs|
@@ -822,7 +825,7 @@ module TensorStream
 
           cast_value.each_with_index do |v, index|
             cl_object.buffer[index] = v
-          end
+          end rescue binding.pry
         elsif value.is_a?(NArray)
           cl_object.buffer = value
         elsif data_type == :boolean
