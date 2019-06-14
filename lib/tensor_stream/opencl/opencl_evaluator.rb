@@ -826,6 +826,7 @@ module TensorStream
 
           cast_value.each_with_index do |v, index|
             cl_object.buffer[index] = v
+          end
         elsif value.is_a?(NArray)
           cl_object.buffer = value
         elsif data_type == :boolean

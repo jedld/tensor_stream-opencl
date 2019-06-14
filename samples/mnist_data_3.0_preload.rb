@@ -81,10 +81,10 @@ labels = mnist.train.labels
 test_images = mnist.test.images
 test_labels = mnist.test.labels
 
-all_train_images = tf.variable(images, name: 'train_images', trainable: false)
-all_train_labels = tf.variable(labels, name: 'train_labels', trainable: false)
-all_test_images = tf.variable(test_images, name: 'test_images', trainable: false)
-all_test_labels = tf.variable(test_labels, name: 'test_labels', trainable: false)
+all_train_images = tf.constant(images, name: 'train_images')
+all_train_labels = tf.constant(labels, name: 'train_labels')
+all_test_images = tf.constant(test_images, name: 'test_images')
+all_test_labels = tf.constant(test_labels, name: 'test_labels')
 
 # The model
 stride = 1  # output is 28x28
