@@ -14,7 +14,9 @@ require 'tensor_stream/opencl/nn_ops'
 require 'tensor_stream/opencl/images_ops'
 require 'tensor_stream/opencl/array_ops'
 require 'tensor_stream/opencl/random_ops'
+require 'tensor_stream/opencl/variable_ops'
 require 'tensor_stream/helpers/op_helper'
+require 'tensor_stream/opencl/opencl_storage_manager'
 
 module TensorStream
   module Evaluator
@@ -51,6 +53,7 @@ module TensorStream
       include TensorStream::OpenCLHelpers::ImagesOps
       include TensorStream::OpenCLHelpers::ArrayOps
       include TensorStream::OpenCLHelpers::RandomOps
+      include TensorStream::OpenCLHelpers::VariableOps
       include TensorStream::CLEventHelpers
 
       def initialize(session, device, thread_pool: nil, log_intermediates: false)
@@ -69,6 +72,10 @@ module TensorStream
       end
 
       class << self
+        def get_storage_manager
+          OpenclStorageManager.current_storage_manager
+        end
+
         def query_supported_devices
           devices = query_devices_with_score
           devices.sort_by { |a| a[1] }.map do |d|
@@ -379,34 +386,6 @@ module TensorStream
         end
       end
 
-      register_op :assign, noop: true do |context, tensor, inputs|
-        assign_var(tensor, inputs[1], context)
-      end
-
-      register_op :assign_add do |context, tensor, inputs|
-        value = execute_2_operand_func('add', tensor, inputs[0], inputs[1])
-        assign_var(tensor, value, context)
-      end
-
-      register_op :assign_sub do |context, tensor, inputs|
-        value = execute_2_operand_func('sub', tensor, inputs[0], inputs[1])
-        assign_var(tensor, value, context)
-      end
-
-      register_op %i[variable variable_v2], noop: true do |_context, tensor, _inputs|
-        assign = tensor.inputs[0] || tensor
-
-        if assign.container_buffer.nil?
-          value = assign.container
-
-          raise "Variable #{tensor.name} not initialized!" if value.nil?
-
-          assign.options[:container].buffer = convert_to_opencl(value, shape_eval(value), data_type: tensor.data_type, name: assign.name)
-          assign.options[:container].value = value
-        end
-        assign.container_buffer
-      end
-
       register_op :placeholder, noop: true do |context, tensor, _inputs|
         ph = @context[tensor.name.to_sym].tap do |c|
           raise TensorStream::ValueError, "missing placeholder #{tensor.name}" if c.nil?
@@ -521,28 +500,6 @@ module TensorStream
         wrap_opencl(inputs[0].buffer.size, name: tensor.name, data_type: tensor.options[:out_type] || :int32)
       end
 
-      register_op :restore_ts do |context, tensor, inputs|
-        inputs = inputs.dup
-        filename = inputs.shift
-        tensor_names = inputs
-
-        filename = read_final_result(complete_eval(filename, context))
-        tensor_names.map! { |n| read_final_result(complete_eval(n, context)) }
-
-        input_dump = YAML.safe_load(File.read(filename), [Symbol])
-        vars = tensor.graph.get_collection(GraphKeys::GLOBAL_VARIABLES)
-
-        vars.select! { |v| input_dump['variables'].key?(v.name) && tensor_names.include?(v.name) }
-        vars.each do |variable|
-          data = TensorStream::Packer.unpack(Zlib::Inflate.inflate(Base64.decode64(input_dump['variables'][variable.name]['data'])), variable.data_type)
-          shape = input_dump['variables'][variable.name]['shape']
-          variable.buffer = convert_to_opencl(data, shape, data_type: variable.data_type, name: variable.name)
-          variable.value = TensorShape.reshape(data, shape)
-        end
-
-        nil
-      end
-
       def eval_operation(tensor, child_context)
         cache_key = "#{tensor.graph.object_id}_opencl_#{tensor.name}:#{object_id}"
         return @context[:_cache][cache_key] if @context[:_cache].key?(cache_key)
@@ -619,27 +576,6 @@ module TensorStream
       end
 
       private
-
-      def assign_var(tensor, b, child_context)
-        assign = tensor.inputs[0] || tensor
-        buffer = complete_eval(b, child_context)
-
-        if assign.container_buffer
-          event_wait_list = build_event_wait_list([buffer, assign.container_buffer])
-        else
-          var_buffer = _create_result_buffer(buffer.data_type, buffer.shape, tensor.name)
-          assign.options[:container].buffer = var_buffer
-        end
-
-        assign.container_buffer.op = if assign.container_buffer.cl_buffer != buffer.cl_buffer
-          _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
-        else
-          buffer.op
-        end
-
-        assign.container_buffer.dirty = true
-        assign.container_buffer
-      end
 
       def execute_2_operand_func(op_name, tensor, a, b, prog_name = nil)
         a, b = auto_type_cast(a, b, name: "#{tensor.name}/cast_#{a.name}_#{b.data_type}")
