@@ -4,32 +4,25 @@ module TensorStream
     module VariableOps
       def VariableOps.included(klass)
         klass.class_eval do
-          register_op :assign, noop: true do |context, tensor, inputs|
-            assign_var(tensor, inputs[1], context)
+          register_op :assign do |context, tensor, inputs|
+            assign_var_buffer(tensor, inputs[0])
           end
 
           register_op :assign_add do |context, tensor, inputs|
-            value = execute_2_operand_func('add', tensor, inputs[0], inputs[1])
-            assign_var(tensor, value, context)
+            current_value = read_var(tensor)
+            value = execute_2_operand_func('add', tensor, inputs[0], current_value)
+            assign_var_buffer(tensor, value)
           end
 
           register_op :assign_sub do |context, tensor, inputs|
             value = execute_2_operand_func('sub', tensor, inputs[0], inputs[1])
-            assign_var(tensor, value, context)
+            assign_var_buffer(tensor, value)
           end
 
           register_op %i[variable variable_v2], noop: true do |_context, tensor, _inputs|
             assign = tensor.inputs[0] || tensor
 
-            if assign.container_buffer.nil?
-              value = assign.container
-
-              raise "Variable #{tensor.name} not initialized!" if value.nil?
-
-              assign.options[:container].buffer = convert_to_opencl(value, shape_eval(value), data_type: tensor.data_type, name: assign.name)
-              assign.options[:container].value = value
-            end
-            assign.container_buffer
+            read_var(assign)
           end
 
           register_op :restore_ts do |context, tensor, inputs|
@@ -59,23 +52,27 @@ module TensorStream
 
           def assign_var(tensor, b, child_context)
             assign = tensor.inputs[0] || tensor
-            buffer = complete_eval(b, child_context)
+            value = assign.inputs[0]
+            buffer = complete_eval(value, child_context)
+            manager = TensorStream::OpenclStorageManager.current_storage_manager
 
-            if assign.container_buffer
-              event_wait_list = build_event_wait_list([buffer, assign.container_buffer])
-            else
-              var_buffer = _create_result_buffer(buffer.data_type, buffer.shape, tensor.name)
-              assign.options[:container].buffer = var_buffer
-            end
+            raise "not a variable #{assign.name}" unless assign.options.key?(:var_name)
 
-            assign.container_buffer.op = if assign.container_buffer.cl_buffer != buffer.cl_buffer
-              _opencl_queue.enqueue_copy_buffer(buffer.cl_buffer, assign.container_buffer.cl_buffer, event_wait_list: event_wait_list)
-            else
-              buffer.op
-            end
+            manager.cl_assign_var(tensor.graph, _opencl_queue, assign.options[:var_name], buffer)
+          end
 
-            assign.container_buffer.dirty = true
-            assign.container_buffer
+          def assign_var_buffer(tensor, buffer)
+            raise "not a variable #{tensor.name}" unless tensor.options.key?(:var_name)
+
+            manager = TensorStream::OpenclStorageManager.current_storage_manager
+            manager.cl_assign_var(tensor.graph, _opencl_queue, tensor.options[:var_name], buffer)
+          end
+
+          def read_var(tensor)
+            raise "not a variable #{tensor.name}" unless tensor.options.key?(:var_name)
+
+            manager = TensorStream::OpenclStorageManager.current_storage_manager
+            manager.cl_read_var(tensor.graph, _opencl_queue, tensor.options[:var_name])
           end
         end
       end

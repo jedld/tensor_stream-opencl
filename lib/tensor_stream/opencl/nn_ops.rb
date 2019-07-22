@@ -11,18 +11,18 @@ module TensorStream
 
             assign = tensor.inputs[0] || tensor
 
-            assign.container_buffer.dirty = true # force buffer copy when variable is read externally
-            output_buffer = assign.container_buffer
+            output_buffer = read_var(assign)
 
             work_group = [output_buffer.total_elements]
 
-            event_wait_list = build_event_wait_list([assign.container_buffer, learning_rate, delta])
+            event_wait_list = build_event_wait_list([output_buffer, learning_rate, delta])
 
             event = call_program("apply_gradient", output_buffer.data_type,
                            work_group,
                            delta.cl_buffer,
                            learning_rate.cl_buffer,
                            output_buffer.cl_buffer, event_wait_list: event_wait_list)
+            output_buffer.dirty = true
             output_buffer.op = event
             output_buffer
           end
@@ -92,11 +92,10 @@ module TensorStream
             assign_v = tensor.inputs[2]
 
             # mark variable buffers as dirty
-            assign.container_buffer.dirty = true # force buffer copy when variable is read externally
-            assign_m.container_buffer.dirty = true # force buffer copy when variable is read externally
-            assign_v.container_buffer.dirty = true # force buffer copy when variable is read externally
+            assign_m_container_buffer = read_var(assign_m)
+            assign_v_container_buffer = read_var(assign_v)
 
-            output_buffer = assign.container_buffer
+            output_buffer = read_var(assign)
 
             work_group = [output_buffer.total_elements]
 
@@ -110,13 +109,19 @@ module TensorStream
                                       beta1_t.cl_buffer,
                                       beta2_t.cl_buffer,
                                       epsilon_t.cl_buffer,
-                                      assign_m.container_buffer.cl_buffer,
-                                      assign.container_buffer.cl_buffer,
-                                      assign_v.container_buffer.cl_buffer,
+                                      assign_m_container_buffer.cl_buffer,
+                                      output_buffer.cl_buffer,
+                                      assign_v_container_buffer.cl_buffer,
                                       event_wait_list: event_wait_list)
             output_buffer.op = event
-            assign_m.container_buffer.op = event
-            assign_v.container_buffer.op = event
+            assign_m_container_buffer.op = event
+            assign_v_container_buffer.op = event
+
+            # mark buffers as dirty
+            output_buffer.dirty = true
+            assign_m_container_buffer.dirty = true
+            assign_v_container_buffer.dirty = true
+
             output_buffer
           end
 
@@ -126,9 +131,8 @@ module TensorStream
             assign = tensor.inputs[0] || tensor
             assign_acc = tensor.inputs[1]
 
-            assign.container_buffer.dirty = true
-            assign_acc.container_buffer.dirty = true
-            output_buffer = assign.container_buffer
+            assign_acc_container_buffer = read_var(assign_acc)
+            output_buffer = read_var(assign)
 
             work_group = [output_buffer.total_elements]
 
@@ -138,11 +142,13 @@ module TensorStream
                                       work_group,
                                       lr.cl_buffer,
                                       grad.cl_buffer,
-                                      assign.container_buffer.cl_buffer,
-                                      assign_acc.container_buffer.cl_buffer,
+                                      output_buffer.cl_buffer,
+                                      assign_acc_container_buffer.cl_buffer,
                                       event_wait_list: event_wait_list)
             output_buffer.op = event
-            assign_acc.container_buffer.op = event
+            output_buffer.dirty = true
+            assign_acc_container_buffer.op = event
+            assign_acc_container_buffer.dirty = true
             output_buffer
           end
 
