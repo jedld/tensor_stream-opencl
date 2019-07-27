@@ -9,14 +9,11 @@ module TensorStream
           end
 
           register_op :assign_add do |context, tensor, inputs|
-            current_value = read_var(tensor)
-            value = execute_2_operand_func('add', tensor, inputs[0], current_value)
-            assign_var_buffer(tensor, value)
+            assign_op('assign_add', tensor, inputs)
           end
 
           register_op :assign_sub do |context, tensor, inputs|
-            value = execute_2_operand_func('sub', tensor, inputs[0], inputs[1])
-            assign_var_buffer(tensor, value)
+            assign_op('assign_sub', tensor, inputs)
           end
 
           register_op %i[variable variable_v2], noop: true do |_context, tensor, _inputs|
@@ -73,6 +70,32 @@ module TensorStream
 
             manager = TensorStream::OpenclStorageManager.current_storage_manager
             manager.cl_read_var(tensor.graph, _opencl_queue, tensor.options[:var_name])
+          end
+
+          def assign_op(program, tensor, inputs)
+            output_buffer = read_var(tensor)
+
+            dtype = output_buffer.data_type
+            event_wait_list = build_event_wait_list(inputs)
+            var_shape = output_buffer.shape.reduce(:*) || 1
+            input_shape = inputs[0].shape.reduce(:*) || 1
+            mode = 0
+            work_group = [ var_shape ]
+
+            cl_row = OpenCL::Int1.new(input_shape)
+
+            if var_shape > input_shape
+              mode = 1
+              raise TensorStream::ValueError, "Incompatible shape sizes #{var_shape} != #{input_shape}" if var_shape & input_shape != 0
+              work_group = [var_shape / input_shape, input_shape]
+            end
+
+            output_buffer.op = _cl_program(program, dtype: tensor.data_type)
+              .send("#{program}_#{dtype}_#{mode}", _opencl_queue, work_group, cl_row, output_buffer.cl_buffer,
+              inputs[0].cl_buffer, event_wait_list: event_wait_list)
+
+            output_buffer.dirty = true
+            output_buffer
           end
         end
       end
